@@ -1,0 +1,295 @@
+/* src/theme/theme.css
+ *
+ * DESIGNER-OWNED. The single source of colour, radius and font for the app.
+ *
+ * This is the shadcn equivalent of tokens.ts in the antd/MUI packs — and note
+ * the inversion: those packs BANNED CSS outright and put colour in a .ts file.
+ * Here it is the opposite. shadcn's theme is a set of CSS custom properties, so
+ * this file is the one place raw colour values are allowed, and the ESLint
+ * colour bans exist to stop colour leaking anywhere else.
+ *
+ * ── How the three layers connect ──────────────────────────────────────────
+ *
+ *   :root / .dark   define --primary, --background, ... as oklch values
+ *   @theme inline   maps them to --color-* so Tailwind emits bg-primary etc.
+ *   your components use bg-primary / text-muted-foreground and nothing else
+ *
+ * Skip the @theme inline block and the variables still exist but no utility
+ * class is generated for them: bg-primary silently does nothing. That block is
+ * not optional decoration.
+ *
+ * ── Editing this file ─────────────────────────────────────────────────────
+ *
+ * Change a value here and every screen, every story and the Theme Showcase
+ * move together. That is the whole point — if a screen doesn't move, someone
+ * bypassed the theme, and the lint rules should have caught it.
+ *
+ * Values are oklch(L C H). L is lightness 0–1, C is chroma (0 = grey), H is
+ * hue in degrees. `oklch(0.6 0.2 250)` is a mid blue. You do not need to hand-
+ * write these — https://ui.shadcn.com/themes generates a full block to paste
+ * over the two below.
+ *
+ * ALWAYS change a colour in PAIRS. --primary and --primary-foreground are what
+ * goes on it; a new --primary without a matching --primary-foreground gives you
+ * unreadable text somewhere you won't notice until review.
+ */
+
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+/* Dark mode is a class on <html>, toggled by src/theme/ThemeProvider.tsx.
+ * Tailwind v4 has no darkMode config option — this @custom-variant IS the
+ * configuration. Remove it and every dark: utility in the app stops working,
+ * including all of shadcn's own. */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-secondary-hover: var(--secondary-hover);
+  --color-muted-hover: var(--muted-hover);
+  --color-primary-tinted: var(--primary-tinted);
+  --color-primary-tinted-hover: var(--primary-tinted-hover);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-heading: var(--font-sans);
+  --font-sans: 'Geist Variable', sans-serif;
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* ── Light ── */
+:root {
+  /* Published by the DevBar while it is visible; 0px everywhere else, so the
+   * same `top-(--devbar-height)` markup is correct in production and in
+   * Storybook. Anchor fixed or sticky app chrome to this — see DevBar.tsx. */
+  --devbar-height: 0px;
+
+  --radius: 0.625rem;
+
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+
+  /* ↓ Brand colour goes here. This is almost always the first edit. */
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --destructive-foreground: oklch(0.97 0.01 17);
+
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+}
+
+/* ── Dark ──
+ * Not optional. The DevBar has a theme toggle, the Theme Showcase renders both,
+ * and shadcn's own components ship dark: variants. Leave these at the defaults
+ * until the light palette is settled, then tune. */
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --destructive-foreground: oklch(0.58 0.22 27);
+
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}
+/* Registry hover colours remain part of the semantic theme. */
+:root {
+  --secondary-hover: color-mix(in oklch, var(--secondary), var(--foreground) 5%);
+  --muted-hover: color-mix(in oklch, var(--muted), var(--foreground) 5%);
+  --primary-tinted: oklch(from var(--primary) 0.93 calc(c * 0.4) h);
+  --primary-tinted-hover: oklch(from var(--primary) 0.88 calc(c * 0.5) h);
+}
+.dark {
+  --primary-tinted: oklch(from var(--primary) 0.3 calc(c * 0.4) h);
+  --primary-tinted-hover: oklch(from var(--primary) 0.35 calc(c * 0.5) h);
+}
+
+/* Orchestrator: restrained clinical surfaces and semantic status colours. */
+@theme inline {
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+}
+:root {
+  --background: oklch(0.982 0.003 210);
+  --foreground: oklch(0.25 0.023 230);
+  --card: oklch(1 0 0);
+  --card-foreground: var(--foreground);
+  --primary: oklch(0.395 0.065 190);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.95 0.015 190);
+  --secondary-foreground: var(--primary);
+  --muted: oklch(0.956 0.005 220);
+  --muted-foreground: oklch(0.46 0.02 230);
+  --accent: oklch(0.95 0.019 187);
+  --accent-foreground: var(--primary);
+  --border: oklch(0.907 0.009 220);
+  --input: oklch(0.865 0.012 220);
+  --ring: oklch(0.43 0.07 190);
+  --danger: oklch(0.435 0.15 27);
+  --danger-soft: oklch(0.967 0.014 25);
+  --warning: oklch(0.425 0.085 65);
+  --warning-soft: oklch(0.969 0.029 80);
+  --success: oklch(0.365 0.065 165);
+  --success-soft: oklch(0.954 0.019 163);
+}
+.dark {
+  --danger: oklch(0.82 0.09 25);
+  --danger-soft: oklch(0.29 0.055 25);
+  --warning: oklch(0.86 0.1 80);
+  --warning-soft: oklch(0.3 0.045 65);
+  --success: oklch(0.8 0.075 165);
+  --success-soft: oklch(0.28 0.035 165);
+}
+@layer base {
+  body { margin: 0; }
+  :where(a, button, input, textarea, summary, [tabindex]):not([data-slot="tabs-trigger"]):focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 3px;
+  }
+  html { scroll-padding-top: calc(var(--devbar-height) + 5rem); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  }
+}
+@layer components {
+  .nav-item { @apply flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium; }
+  a.nav-item { @apply text-muted-foreground transition-colors hover:bg-muted hover:text-foreground; }
+  a.nav-active { @apply bg-accent text-primary; }
+  .clinical-panel { @apply rounded-xl border bg-card shadow-none; }
+  .section-kicker { @apply text-[11px] font-medium uppercase tracking-[0.12em] text-muted-foreground; }
+}
+.dark {
+  --background: oklch(0.17 0.012 220);
+  --foreground: oklch(0.96 0.005 220);
+  --card: oklch(0.21 0.014 220);
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.23 0.014 220);
+  --popover-foreground: var(--foreground);
+  --primary: oklch(0.81 0.075 183);
+  --primary-foreground: oklch(0.2 0.025 190);
+  --secondary: oklch(0.29 0.025 190);
+  --secondary-foreground: oklch(0.92 0.025 183);
+  --muted: oklch(0.25 0.013 220);
+  --muted-foreground: oklch(0.78 0.015 220);
+  --accent: oklch(0.28 0.028 190);
+  --accent-foreground: var(--primary);
+  --border: oklch(0.35 0.018 220);
+  --input: oklch(0.4 0.018 220);
+  --ring: var(--primary);
+}
+
+@theme inline {
+  --color-navigation-active: var(--navigation-active);
+}
+:root { --navigation-active: oklch(0.48 0.12 157); }
+.dark { --navigation-active: oklch(0.78 0.1 157); }

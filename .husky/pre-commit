@@ -1,0 +1,4 @@
+npx lint-staged
+node scripts/check-scope.mjs
+node scripts/check-params.mjs
+node scripts/check-props.mjs

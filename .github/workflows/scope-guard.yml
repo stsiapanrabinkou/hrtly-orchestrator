@@ -1,0 +1,192 @@
+# .github/workflows/scope-guard.yml
+name: scope-guard
+on: pull_request
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+
+      # Fails loudly if eslint.presentation.js got dropped or the config was
+      # replaced instead of extended. Without this, every check below can pass
+      # against a config with no rules in it.
+      #
+      # These greps assert on rule PAYLOADS (the message strings), never on rule
+      # IDs. A rule ID proves nothing: both tiers set `no-restricted-syntax`, so
+      # grepping the ID stays green while flat config silently discards one of
+      # the two payloads. If you reword a message in eslint.presentation.js,
+      # reword it here too — that coupling is the point.
+      - name: Guard integrity (rules are actually loaded)
+        run: |
+          CFG=$(npx eslint --print-config src/flows/routes.tsx)
+          echo "$CFG" | grep -q '"react-hooks/rules-of-hooks"'       || { echo "::error::react-hooks missing — the baseline config was clobbered"; exit 1; }
+          echo "$CFG" | grep -q 'It carries the variant, size'       || { echo "::error::element ban missing"; exit 1; }
+          echo "$CFG" | grep -q 'Query hooks are Integration Mode'   || { echo "::error::no-logic import ban missing"; exit 1; }
+          echo "$CFG" | grep -q 'UI cannot import from the smart layer' || { echo "::error::smart-layer import ban missing"; exit 1; }
+          echo "$CFG" | grep -q 'No raw palette utilities'           || { echo "::error::palette ban missing"; exit 1; }
+          echo "$CFG" | grep -q 'No arbitrary colour values'         || { echo "::error::arbitrary-colour ban missing"; exit 1; }
+          echo "$CFG" | grep -q 'No literal colours'                 || { echo "::error::literal-colour ban missing — the authored tier overwrote the shared one"; exit 1; }
+          echo "$CFG" | grep -q 'No style prop'                      || { echo "::error::style-prop ban missing"; exit 1; }
+          echo "$CFG" | grep -q 'No fetch() in presentation'         || { echo "::error::no-restricted-globals missing"; exit 1; }
+          echo "$CFG" | grep -q 'No cross-flow imports'               || { echo "::error::cross-flow import ban missing from src/flows"; exit 1; }
+          echo "✓ presentation guardrails are live"
+
+      # Belt and braces: prove the bans FIRE, not just that they are configured.
+      # This is what catches a guardrail that is present but inert.
+      - name: Guards actually fire (negative test)
+        run: |
+          mkdir -p src/flows/__guardcheck
+          cat > src/flows/__guardcheck/probe.tsx <<'PROBE'
+          import axios from "axios";
+          export const Probe = () => (
+            <button style={{ padding: 8 }} className="bg-blue-500 border-[#1677ff]">
+              {String(axios)}
+            </button>
+          );
+          PROBE
+          # --format json, not unix: the unix formatter was unbundled from
+          # ESLint core and would need a separate install.
+          set +e
+          OUT=$(npx eslint src/flows/__guardcheck/probe.tsx --format json)
+          set -e
+          rm -rf src/flows/__guardcheck
+          echo "$OUT" | grep -q '"no-restricted-imports"' || { echo "::error::no-logic ban did not fire on a deliberate violation"; exit 1; }
+          echo "$OUT" | grep -q '"react/forbid-elements"' || { echo "::error::element ban did not fire on a deliberate violation"; exit 1; }
+          echo "$OUT" | grep -q 'No style prop'           || { echo "::error::style-prop ban did not fire"; exit 1; }
+          echo "$OUT" | grep -q 'No raw palette utilities' || { echo "::error::palette ban did not fire"; exit 1; }
+          echo "$OUT" | grep -q 'No arbitrary colour'      || { echo "::error::arbitrary-colour ban did not fire"; exit 1; }
+          echo "✓ all guardrails fired on a deliberate violation"
+
+      # Separate probe: the cross-flow ban lives in its own tier, keyed to
+      # relative paths, so it needs a file in a real flow folder importing a
+      # real sibling folder. Merging it into the probe above would not exercise
+      # the pattern.
+      # NOTE: these probe folders must NOT start with an underscore.
+      # `_*` folders are the deliberate shared-ground exception inside /flows
+      # (_mocks, _devbar, _ready), so an underscore-named probe gets exempted
+      # and this step reports a false failure. Cost me a debugging round.
+      - name: Cross-flow import ban fires
+        run: |
+          mkdir -p src/flows/guardcheck-a src/flows/guardcheck-b
+          echo 'export const A = 1;' > src/flows/guardcheck-a/A.ts
+          echo 'import { A } from "../guardcheck-a/A"; export const B = A;' > src/flows/guardcheck-b/B.ts
+          set +e
+          OUT=$(npx eslint src/flows/guardcheck-b/B.ts --format json)
+          set -e
+          rm -rf src/flows/guardcheck-a src/flows/guardcheck-b
+          echo "$OUT" | grep -q 'No cross-flow imports' || { echo "::error::cross-flow import ban did not fire"; exit 1; }
+          echo "✓ cross-flow import ban fired"
+
+      # The mirror image of the negative test, and specific to shadcn.
+      #
+      # In this kit the component library is SOURCE IN THE REPO, so a rule that
+      # is too aggressive is as damaging as a rule that is missing: it makes
+      # `npx shadcn add <anything>` produce un-committable code. shadcn's own
+      # source legitimately contains raw <button> and <table>, style={{...}} in
+      # progress.tsx, text-white in the destructive variants, bg-black/50 scrims,
+      # and [&_.recharts-dot[stroke='#fff']] selectors in chart.tsx.
+      #
+      # If this step fails, the fix is almost always that a rule from the
+      # authored tier leaked into the shared tier.
+      # `src/hooks/**` is in this glob because the CLI writes use-mobile.ts
+      # there. It was missing in the first version of this pack, which is
+      # exactly how use-mobile.ts reached a real project failing lint.
+      - name: Vendored components stay lintable (positive test)
+        run: npx eslint "src/components/ui/**/*.{ts,tsx}" "src/hooks/**/*.{ts,tsx}" --max-warnings=0
+
+      # `tsc --noEmit` is a NO-OP on this template: the root tsconfig.json is a
+      # solution file ("files": [] + references), so it type-checks zero files
+      # and exits 0. Verified — a file containing `const bad: number = "a
+      # string"` passes --noEmit and fails -b. Use -b.
+      - name: Types
+        run: npx tsc -b
+
+      - name: Lint presentation folders
+        run: npx eslint "src/{components/ui,shared/ui,features/*/ui,flows,theme,stories}/**/*.{ts,tsx}" --max-warnings=0
+
+      # The antd version of this kit never built anything in CI, which meant the
+      # DevBar's "tree-shaken out of production" claim was asserted and never
+      # checked. Both builds below are cheap and both have caught real breakage.
+      - name: Production build
+        run: npx vite build
+
+      # The DevBar must not reach production. `import.meta.env.DEV` is statically
+      # replaced at build time, so DevBarPanel and everything it imports should
+      # be eliminated. Grep for its own strings, not for "DEV" — React ships
+      # __REACT_DEVTOOLS_GLOBAL_HOOK__ and would false-positive.
+      - name: DevBar is absent from the production bundle
+        run: |
+          if grep -rqF "Jump to screen" dist/assets/*.js; then
+            echo "::error::DevBar leaked into the production bundle — the import.meta.env.DEV gate is not eliminating it"; exit 1
+          fi
+          if grep -rqF "flattenRoutes" dist/assets/*.js; then
+            echo "::error::DevBar internals leaked into the production bundle"; exit 1
+          fi
+          echo "✓ DevBar tree-shaken out of production"
+
+      # Catches the single most common Tailwind v4 mistake in this setup: an
+      # edit to theme.css that removes or breaks the @theme inline block. The
+      # custom properties still exist, no utility class is generated for them,
+      # and bg-primary silently does nothing — with no build error.
+      - name: Theme tokens reached the stylesheet
+        run: |
+          grep -rqF "bg-primary" dist/assets/*.css \
+            || { echo "::error::bg-primary was never emitted — check the @theme inline block in src/theme/theme.css"; exit 1; }
+          grep -rq -- "--primary:" dist/assets/*.css \
+            || { echo "::error::theme custom properties are missing from the build"; exit 1; }
+          echo "✓ theme tokens emitted"
+
+      - name: Storybook build
+        run: npx storybook build --quiet
+
+      # The DevBar's "Flow map" button links to a fixed story ID. Renaming the
+      # story's title or export silently 404s that button.
+      - name: Flow Map story ID matches the DevBar link
+        run: |
+          node -e "
+            const idx = require('./storybook-static/index.json');
+            if (!idx.entries['system-flow-map--all-flows']) {
+              console.error('::error::story id system-flow-map--all-flows is missing — the DevBar Flow map button is broken');
+              process.exit(1);
+            }
+            console.log('✓ flow map story id intact');
+          "
+
+      # A detail screen that ignores its own :id renders the same record for
+      # every URL and still looks finished in review. Cheap to check, and it
+      # has already slipped through once.
+      - name: Param routes read their params
+        run: node scripts/check-params.mjs
+
+      # Screens must take their data as props with mock defaults, or AGENTS.md
+      # §3's "the screen file doesn't change" promise is not true. Three
+      # hardcoded copies of one card list shipped on a real project before this
+      # existed.
+      - name: Flow screens take data as props
+        run: node scripts/check-props.mjs
+
+      # The bridge must stay generic: /app reads flows/routes.tsx, it never names
+      # screens. If this fails, someone hardcoded a route and designers will be
+      # forced into /app on their next flow.
+      - name: Router bridge is generic
+        run: |
+          grep -q 'from "../flows/routes"' src/app/router.tsx \
+            || { echo "::error::src/app/router.tsx no longer consumes flows/routes.tsx"; exit 1; }
+          echo "✓ router bridge consumes /flows"
+
+      # check-scope.mjs FAILS the job if this ref doesn't resolve, instead of
+      # printing "skipped" and exiting 0. Fetch it explicitly so the guard has
+      # something to compare against.
+      - name: Fetch base branch
+        run: git fetch --no-tags origin "${{ github.base_ref }}:refs/remotes/origin/${{ github.base_ref }}" || git fetch --no-tags origin "${{ github.base_ref }}"
+
+      - name: Scope check (designer stays in presentation)
+        run: node scripts/check-scope.mjs
+        env:
+          GITHUB_BASE_REF: origin/${{ github.base_ref }}

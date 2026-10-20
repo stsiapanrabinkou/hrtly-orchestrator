@@ -1,0 +1,792 @@
+/** Fictional presentation fixtures. Snapshot: 19 Oct 2026, 12:00 UTC.
+ * WBS: Orchestrator (FULL) rows 23–31, 50–57, 108–113, 117–121.
+ * No value, outcome, flag or projection is calculated in the interface.
+ */
+export type Metric = {
+  label: string;
+  value: string;
+  unit: string;
+  date: string;
+  note: string;
+  trend?: string;
+  history?: string;
+  baseline?: string;
+  target?: string;
+};
+export type Patient = {
+  id: string;
+  displayId: string;
+  name: string;
+  initials: string;
+  dob: string;
+  tracks: string[];
+  risk: string;
+  flag: "red" | "yellow" | "none";
+  reason: string;
+  lastDate: string;
+  elapsed: string;
+  measurementType: string;
+  overdue: boolean;
+  reading: string;
+  readingDate: string;
+  metrics: Metric[];
+  alertDate: string;
+  recommendationId?: string;
+  additionalOutcome?: Patient["outcome"];
+  outcome: {
+    track: string;
+    measure: string;
+    baseline: string;
+    current: string;
+    target: string;
+    status: string;
+    quality: string;
+    projection: string;
+    progress: number | null;
+    progressLabel: string;
+    window: string;
+    remaining: string;
+  };
+};
+const ckmOutcome = {
+  track: "CKM",
+  measure: "Blood pressure control",
+  baseline: "152/92 mmHg · Apr 19",
+  current: "146/88 mmHg · Oct 9",
+  target: "Systolic reduction ≥10 mmHg or BP <130/80",
+  status: "Not Met",
+  quality: "Recent data outdated",
+  projection: "Insufficient recent data",
+  progress: 60,
+  progressLabel: "6 of 10 mmHg systolic reduction",
+  window: "Apr 19, 2026 – Apr 18, 2027",
+  remaining: "181 days remaining",
+};
+const thomasMetrics: Metric[] = [
+  {
+    label: "Blood pressure",
+    value: "146/88",
+    unit: "mmHg",
+    date: "Oct 9, 2026 · 09:00 UTC",
+    note: "Last reading 10 days ago",
+    trend: "24,18 64,34 104,29 144,49 184,44 224,58 264,64",
+    history:
+      "Sep 18: 152/92; Sep 22: 150/90; Sep 25: 151/90; Sep 29: 148/89; Oct 2: 149/90; Oct 5: 147/89; Oct 9: 146/88 mmHg",
+    baseline: "152/92 mmHg",
+    target: "≥10 mmHg systolic reduction",
+  },
+  {
+    label: "HbA1c",
+    value: "7.4",
+    unit: "%",
+    date: "Sep 22, 2026",
+    note: "Most recent laboratory result",
+    trend: "24,20 84,24 144,44 204,52 264,59",
+    history:
+      "May 12: 7.9%; Jun 16: 7.8%; Jul 21: 7.6%; Aug 18: 7.5%; Sep 22: 7.4%",
+  },
+  {
+    label: "PHQ-9",
+    value: "Not applicable",
+    unit: "",
+    date: "BH track not enrolled",
+    note: "No outcome assigned for this track",
+  },
+  {
+    label: "Pain score",
+    value: "Not applicable",
+    unit: "",
+    date: "MSK track not enrolled",
+    note: "No outcome assigned for this track",
+  },
+];
+const bhMetrics: Metric[] = [
+  {
+    label: "PHQ-9",
+    value: "12",
+    unit: "/ 27",
+    date: "Oct 18, 2026 · 10:00 UTC",
+    note: "Patient-reported questionnaire",
+    trend: "24,23 84,35 144,32 204,52 264,60",
+    history: "Jun 18: 16; Jul 18: 15; Aug 18: 15; Sep 18: 13; Oct 18: 12",
+    baseline: "16",
+    target: "≥5-point improvement or score <5",
+  },
+];
+const painMetrics: Metric[] = [
+  {
+    label: "Pain score",
+    value: "4",
+    unit: "/ 10",
+    date: "Oct 18, 2026 · 11:00 UTC",
+    note: "Functional PROM: improvement recorded",
+    trend: "24,20 84,38 144,34 204,60 264,60",
+    history: "Jun 18: 6; Jul 18: 5; Aug 18: 5; Sep 18: 4; Oct 18: 4",
+    baseline: "6 / 10",
+    target: "≥2-point reduction and functional improvement",
+  },
+];
+export const patients: Patient[] = [
+  {
+    id: "d1000000-0000-4000-8000-000000001001",
+    displayId: "P-1001",
+    name: "Elena Brooks",
+    initials: "EB",
+    dob: "Mar 12, 1954",
+    tracks: ["CKM"],
+    risk: "94",
+    flag: "red",
+    reason: "Alert requires clinical review",
+    lastDate: "Oct 19 · 08:00 UTC",
+    elapsed: "Today",
+    measurementType: "BP",
+    overdue: false,
+    reading: "158/94 mmHg",
+    readingDate: "Oct 19",
+    metrics: [
+      {
+        label: "Blood pressure",
+        value: "158/94",
+        unit: "mmHg",
+        date: "Oct 19, 2026 · 08:00 UTC",
+        note: "Recent data complete",
+        trend: "24,60 84,54 144,42 204,32 264,22",
+        history:
+          "Oct 5: 150/90; Oct 8: 152/91; Oct 12: 154/92; Oct 16: 156/93; Oct 19: 158/94 mmHg",
+      },
+    ],
+    alertDate: "Oct 19, 2026 · 08:05 UTC",
+    recommendationId: "review-1001",
+    outcome: {
+      ...ckmOutcome,
+      baseline: "160/96 mmHg · Apr 19",
+      current: "158/94 mmHg · Oct 19",
+      quality: "Recent data complete",
+      projection: "At risk of not meeting target",
+      progress: 20,
+      progressLabel: "2 of 10 mmHg systolic reduction",
+    },
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001002",
+    displayId: "P-1002",
+    name: "Thomas Reed",
+    initials: "TR",
+    dob: "Jul 21, 1948",
+    tracks: ["CKM"],
+    risk: "87",
+    flag: "yellow",
+    reason: "Gap in monitoring",
+    lastDate: "Oct 9 · 09:00 UTC",
+    elapsed: "10 days ago",
+    measurementType: "BP",
+    overdue: true,
+    reading: "146/88 mmHg",
+    readingDate: "Oct 9",
+    metrics: thomasMetrics,
+    alertDate: "Oct 17, 2026 · 09:00 UTC",
+    recommendationId: "outreach-1002",
+    outcome: ckmOutcome,
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001003",
+    displayId: "P-1003",
+    name: "Sofia Bennett",
+    initials: "SB",
+    dob: "Nov 4, 1957",
+    tracks: ["BH"],
+    risk: "82",
+    flag: "red",
+    reason: "Alert requires clinical review",
+    lastDate: "Oct 18 · 10:00 UTC",
+    elapsed: "1 day ago",
+    measurementType: "PHQ-9",
+    overdue: false,
+    reading: "PHQ-9 12 / 27",
+    readingDate: "Oct 18",
+    metrics: bhMetrics,
+    alertDate: "Oct 18, 2026 · 10:05 UTC",
+    recommendationId: "review-1003",
+    outcome: {
+      track: "BH",
+      measure: "PHQ-9 improvement",
+      baseline: "16 / 27 · Apr 19",
+      current: "12 / 27 · Oct 18",
+      target: "≥5-point improvement or remission (score <5)",
+      status: "Not Met",
+      quality: "Recent data complete",
+      projection: "Likely to meet target",
+      progress: 80,
+      progressLabel: "4 of 5 points improved",
+      window: ckmOutcome.window,
+      remaining: ckmOutcome.remaining,
+    },
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001004",
+    displayId: "P-1004",
+    name: "William Carter",
+    initials: "WC",
+    dob: "Feb 16, 1950",
+    tracks: ["BH"],
+    risk: "68",
+    flag: "yellow",
+    reason: "Gap in monitoring",
+    lastDate: "Oct 11 · 10:00 UTC",
+    elapsed: "8 days ago",
+    measurementType: "PHQ-9",
+    overdue: true,
+    reading: "PHQ-9 9 / 27",
+    readingDate: "Oct 11",
+    metrics: [
+      {
+        label: "PHQ-9",
+        value: "9",
+        unit: "/ 27",
+        date: "Oct 11, 2026 · 10:00 UTC",
+        note: "Recent data outdated",
+        trend: "24,20 84,24 144,38 204,44 264,56",
+        history: "Jun 11: 12; Jul 11: 12; Aug 11: 11; Sep 11: 10; Oct 11: 9",
+      },
+    ],
+    alertDate: "Oct 19, 2026 · 10:00 UTC",
+    recommendationId: "outreach-1004",
+    outcome: {
+      track: "BH",
+      measure: "PHQ-9 improvement",
+      baseline: "12 / 27 · Apr 19",
+      current: "9 / 27 · Oct 11",
+      target: "≥5-point improvement or remission (score <5)",
+      status: "Not Met",
+      quality: "Recent data outdated",
+      projection: "Insufficient recent data",
+      progress: 60,
+      progressLabel: "3 of 5 points improved",
+      window: ckmOutcome.window,
+      remaining: ckmOutcome.remaining,
+    },
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001005",
+    displayId: "P-1005",
+    name: "Margaret Ellis",
+    initials: "ME",
+    dob: "Sep 8, 1952",
+    tracks: ["CKM", "BH"],
+    risk: "55",
+    flag: "none",
+    reason: "No open alerts",
+    lastDate: "Oct 19 · 10:00 UTC",
+    elapsed: "Today",
+    measurementType: "PHQ-9",
+    overdue: false,
+    reading: "128/76 mmHg · PHQ-9 4/27",
+    readingDate: "Both Oct 19",
+    metrics: [
+      {
+        label: "Blood pressure",
+        value: "128/76",
+        unit: "mmHg",
+        date: "Oct 19, 2026 · 08:00 UTC",
+        note: "Recent data complete",
+        trend: "24,20 84,28 144,42 204,52 264,65",
+        history:
+          "Jun 19: 142/86; Jul 19: 138/84; Aug 19: 136/82; Sep 19: 132/78; Oct 19: 128/76 mmHg",
+      },
+      {
+        label: "PHQ-9",
+        value: "4",
+        unit: "/ 27",
+        date: "Oct 19, 2026 · 10:00 UTC",
+        note: "Recent data complete",
+        trend: "24,20 84,28 144,42 204,52 264,65",
+        history: "Jun 19: 10; Jul 19: 8; Aug 19: 7; Sep 19: 6; Oct 19: 4",
+      },
+    ],
+    alertDate: "",
+    additionalOutcome: {
+      track: "BH",
+      measure: "PHQ-9 improvement",
+      baseline: "10 / 27 · Apr 19",
+      current: "4 / 27 · Oct 19",
+      target: "≥5-point improvement or remission (score <5)",
+      status: "Met",
+      quality: "Recent data complete",
+      projection: "Likely to meet target",
+      progress: 100,
+      progressLabel: "6-point improvement · remission recorded",
+      window: ckmOutcome.window,
+      remaining: ckmOutcome.remaining,
+    },
+    outcome: {
+      ...ckmOutcome,
+      baseline: "142/86 mmHg · Apr 19",
+      current: "128/76 mmHg · Oct 19",
+      status: "Met",
+      quality: "Recent data complete",
+      projection: "Likely to meet target",
+      progress: 100,
+      progressLabel: "14 mmHg systolic reduction · target reached",
+    },
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001006",
+    displayId: "P-1006",
+    name: "Daniel Foster",
+    initials: "DF",
+    dob: "Dec 3, 1946",
+    tracks: ["CKM"],
+    risk: "44",
+    flag: "none",
+    reason: "No open alerts",
+    lastDate: "Oct 7 · 09:00 UTC",
+    elapsed: "12 days ago",
+    measurementType: "BP",
+    overdue: true,
+    reading: "136/82 mmHg",
+    readingDate: "Oct 7",
+    metrics: [
+      {
+        label: "Blood pressure",
+        value: "136/82",
+        unit: "mmHg",
+        date: "Oct 7, 2026 · 09:00 UTC",
+        note: "Last reading 12 days ago",
+        trend: "24,20 84,35 144,44 204,56 264,65",
+        history:
+          "Jun 7: 146/88; Jul 7: 144/87; Aug 7: 141/85; Sep 7: 138/84; Oct 7: 136/82 mmHg",
+      },
+    ],
+    alertDate: "",
+    recommendationId: "outreach-1006",
+    outcome: {
+      ...ckmOutcome,
+      baseline: "146/88 mmHg · Apr 19",
+      current: "136/82 mmHg · Oct 7",
+      status: "Met",
+      quality: "Recent data outdated",
+      projection: "Insufficient recent data",
+      progress: 100,
+      progressLabel: "10 mmHg systolic reduction · latest available result",
+    },
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001007",
+    displayId: "P-1007",
+    name: "Grace Morgan",
+    initials: "GM",
+    dob: "May 27, 1958",
+    tracks: ["MSK"],
+    risk: "31",
+    flag: "none",
+    reason: "No open alerts",
+    lastDate: "Oct 18 · 11:00 UTC",
+    elapsed: "1 day ago",
+    measurementType: "Pain",
+    overdue: false,
+    reading: "Pain 4 / 10",
+    readingDate: "Oct 18",
+    metrics: painMetrics,
+    alertDate: "",
+    outcome: {
+      track: "MSK",
+      measure: "Pain and function improvement",
+      baseline: "Pain 6/10 · Apr 19",
+      current: "Pain 4/10 · Oct 18",
+      target: "≥2-point pain reduction AND functional PROM improvement",
+      status: "Met",
+      quality: "Recent data complete; functional improvement recorded",
+      projection: "Likely to meet target",
+      progress: 100,
+      progressLabel: "2-point reduction and functional improvement",
+      window: ckmOutcome.window,
+      remaining: ckmOutcome.remaining,
+    },
+  },
+  {
+    id: "d1000000-0000-4000-8000-000000001008",
+    displayId: "P-1008",
+    name: "Robert Hayes",
+    initials: "RH",
+    dob: "Aug 14, 1951",
+    tracks: ["eCKM"],
+    risk: "20",
+    flag: "none",
+    reason: "No open alerts",
+    lastDate: "No measurements",
+    elapsed: "Not available",
+    measurementType: "—",
+    overdue: false,
+    reading: "No measurements",
+    readingDate: "Baseline missing",
+    metrics: [
+      {
+        label: "HbA1c",
+        value: "No data",
+        unit: "",
+        date: "No measurement recorded",
+        note: "Baseline missing / incomplete",
+      },
+    ],
+    alertDate: "",
+    outcome: {
+      track: "eCKM",
+      measure: "HbA1c control",
+      baseline: "Missing / incomplete",
+      current: "No measurement recorded",
+      target: "HbA1c <7% (or <8% if frail)",
+      status: "Cannot determine",
+      quality: "Baseline and recent data missing",
+      projection: "Insufficient data",
+      progress: null,
+      progressLabel: "Progress unavailable",
+      window: "Window not established",
+      remaining: "Start date unavailable",
+    },
+  },
+];
+export const recommendations = [
+  {
+    id: "outreach-1002",
+    patientId: patients[1].id,
+    title: "Reconnect with Thomas about home readings",
+    text: "Contact the patient to understand why blood pressure readings have stopped.",
+    explanation:
+      "The last available blood pressure reading was recorded on October 9. No new BP readings are available for the following 10 days.",
+    signal: "No BP reading in 10 days",
+    signalDate: "Last BP: Oct 9, 2026 · 09:00 UTC",
+    modified:
+      "Call Thomas to check whether he needs help with his blood pressure monitor and agree on a time for his next reading.",
+    reason: "Outreach has already been arranged by the care team.",
+  },
+  {
+    id: "review-1001",
+    patientId: patients[0].id,
+    title: "Review the open alert for Elena",
+    text: "Review the recorded blood pressure trend and open alert in the patient’s clinical context.",
+    explanation:
+      "An existing red alert and the recent BP measurements have been provided for review. The alert is not derived by this interface.",
+    signal: "Existing red alert · BP trend available",
+    signalDate: "Oct 19, 2026 · 08:05 UTC",
+    modified:
+      "Review Elena’s recent readings with the care team before deciding on follow-up.",
+    reason: "The care team has already scheduled a review.",
+  },
+  {
+    id: "review-1003",
+    patientId: patients[2].id,
+    title: "Review the open alert for Sofia",
+    text: "Review the existing alert and recent PHQ-9 questionnaire in the patient’s clinical context.",
+    explanation:
+      "An existing red alert is associated with this patient. The PHQ-9 history is available as context and does not itself explain the alert severity.",
+    signal: "Existing red alert · PHQ-9 available",
+    signalDate: "Oct 18, 2026 · 10:05 UTC",
+    modified:
+      "Discuss Sofia’s questionnaire and open alert with the assigned care team.",
+    reason: "Review is already arranged.",
+  },
+  {
+    id: "outreach-1004",
+    patientId: patients[3].id,
+    title: "Follow up on William’s monitoring gap",
+    text: "Contact the patient to understand the gap in questionnaire responses.",
+    explanation:
+      "The last available PHQ-9 response was recorded on October 11, eight days before this snapshot.",
+    signal: "No PHQ-9 response in 8 days",
+    signalDate: "Oct 11, 2026 · 10:00 UTC",
+    modified:
+      "Check William’s preferred way to complete the next questionnaire.",
+    reason: "Follow-up is already arranged.",
+  },
+  {
+    id: "outreach-1006",
+    patientId: patients[5].id,
+    title: "Follow up on Daniel’s missing readings",
+    text: "Contact the patient to understand why blood pressure readings have stopped.",
+    explanation:
+      "The last BP reading is 12 days old. No clinical alert is recorded; a monitoring gap is shown separately.",
+    signal: "No BP reading in 12 days · no open alert",
+    signalDate: "Oct 7, 2026 · 09:00 UTC",
+    modified:
+      "Check Daniel’s access to his monitor before agreeing on the next reading.",
+    reason: "Contact is already arranged.",
+  },
+];
+export type Recommendation = (typeof recommendations)[number];
+export const monitoringViews: Record<
+  string,
+  {
+    label: string;
+    rows: Patient[];
+    count: string;
+    alert: string;
+    track: string;
+    recency: string;
+    sort: string;
+    query: string;
+    chips: string[];
+    mode?: string;
+  }
+> = {
+  all: {
+    label: "All patients",
+    rows: patients,
+    count: "8",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: [],
+  },
+  red: {
+    label: "Red flags",
+    rows: [patients[0], patients[2]],
+    count: "2",
+    alert: "red",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["Red flag"],
+  },
+  yellow: {
+    label: "Yellow flags",
+    rows: [patients[1], patients[3]],
+    count: "2",
+    alert: "yellow",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["Yellow flag"],
+  },
+  clear: {
+    label: "No alerts",
+    rows: [patients[4], patients[5], patients[6], patients[7]],
+    count: "4",
+    alert: "clear",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["No alerts"],
+  },
+  overdue: {
+    label: "Monitoring gaps",
+    rows: [patients[1], patients[3], patients[5]],
+    count: "3",
+    alert: "all",
+    track: "all",
+    recency: "overdue",
+    sort: "risk",
+    query: "",
+    chips: ["More than 7 days"],
+  },
+  never: {
+    label: "No measurements",
+    rows: [patients[7]],
+    count: "1",
+    alert: "all",
+    track: "all",
+    recency: "never",
+    sort: "risk",
+    query: "",
+    chips: ["No measurements"],
+  },
+  ckm: {
+    label: "CKM patients",
+    rows: [patients[0], patients[1], patients[4], patients[5]],
+    count: "4",
+    alert: "all",
+    track: "ckm",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["CKM"],
+  },
+  eckm: {
+    label: "eCKM patients",
+    rows: [patients[7]],
+    count: "1",
+    alert: "all",
+    track: "eckm",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["eCKM"],
+  },
+  bh: {
+    label: "BH patients",
+    rows: [patients[2], patients[3], patients[4]],
+    count: "3",
+    alert: "all",
+    track: "bh",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["BH"],
+  },
+  msk: {
+    label: "MSK patients",
+    rows: [patients[6]],
+    count: "1",
+    alert: "all",
+    track: "msk",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: ["MSK"],
+  },
+  gap: {
+    label: "CKM blood pressure gaps",
+    rows: [patients[1], patients[5]],
+    count: "2",
+    alert: "all",
+    track: "ckm",
+    recency: "overdue",
+    sort: "risk",
+    query: "",
+    chips: ["CKM", "More than 7 days"],
+  },
+  search: {
+    label: "Search results",
+    rows: [patients[1]],
+    count: "1",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "Thomas Reed",
+    chips: ["Search: Thomas Reed"],
+  },
+  "no-results": {
+    label: "No results",
+    rows: [],
+    count: "0",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "Alex",
+    chips: ["Search: Alex"],
+    mode: "no-results",
+  },
+  name: {
+    label: "Name A–Z",
+    rows: [
+      patients[5],
+      patients[0],
+      patients[6],
+      patients[4],
+      patients[7],
+      patients[2],
+      patients[1],
+      patients[3],
+    ],
+    count: "8",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "name",
+    query: "",
+    chips: [],
+  },
+  recency: {
+    label: "Oldest measurement first",
+    rows: [
+      patients[5],
+      patients[1],
+      patients[3],
+      patients[2],
+      patients[6],
+      patients[0],
+      patients[4],
+      patients[7],
+    ],
+    count: "8",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "recency",
+    query: "",
+    chips: [],
+  },
+  loading: {
+    label: "Loading",
+    rows: [],
+    count: "—",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: [],
+    mode: "loading",
+  },
+  error: {
+    label: "Load error",
+    rows: [],
+    count: "—",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: [],
+    mode: "error",
+  },
+  empty: {
+    label: "No active patients",
+    rows: [],
+    count: "0",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: [],
+    mode: "empty",
+  },
+  stale: {
+    label: "Refresh failed",
+    rows: patients,
+    count: "8",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: [],
+    mode: "stale",
+  },
+  "no-risk": {
+    label: "Risk unavailable",
+    rows: [
+      patients[0],
+      patients[1],
+      patients[2],
+      patients[3],
+      patients[4],
+      patients[5],
+      patients[6],
+      { ...patients[7], risk: "Not available" },
+    ],
+    count: "8",
+    alert: "all",
+    track: "all",
+    recency: "all",
+    sort: "risk",
+    query: "",
+    chips: [],
+  },
+};
+export const cohortStats = {
+  all: ["8", "2", "2", "3"],
+  ckm: ["4", "1", "1", "2"],
+  eckm: ["1", "0", "0", "0"],
+  bh: ["3", "1", "1", "1"],
+  msk: ["1", "0", "0", "0"],
+  empty: ["0", "0", "0", "0"],
+};
+export const demoThomas = patients[1];
