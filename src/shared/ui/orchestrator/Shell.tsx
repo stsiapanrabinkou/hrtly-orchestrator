@@ -18,12 +18,14 @@ type Props = {
     | "outcomes";
   appBase?: string;
   items?: WorkspaceItem[];
+  showFooter?: boolean;
 };
 export function Shell({
   children,
   section = "monitoring",
   appBase = "",
   items = workspaceNavigation,
+  showFooter = true,
 }: Props) {
   const [pointerInteraction, setPointerInteraction] = useState(false);
   const active =
@@ -93,10 +95,10 @@ export function Shell({
           ):null}
         </TabsContent>
       ))}
-      <footer className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 px-4 pb-6 text-[11px] text-muted-foreground sm:px-8">
+      {showFooter ? <footer className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 px-4 pb-6 text-[11px] text-muted-foreground sm:px-8">
         <span>Last updated Oct 19, 2026, 12:00 UTC</span>
         <span>Orchestrator / Clinician workspace</span>
-      </footer>
+      </footer> : null}
     </div>
     </Tabs>
   );

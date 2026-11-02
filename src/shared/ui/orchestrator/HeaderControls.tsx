@@ -37,11 +37,11 @@ export function HeaderControls({ profile = mockClinician, onProfileOpen, onSignO
             <Globe2 className="hidden size-4 sm:block" /><span>EN</span><ChevronDown className="size-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuContent align="end" className="w-60">
           <DropdownMenuLabel>Language</DropdownMenuLabel>
           <DropdownMenuRadioGroup value="en">
-            <DropdownMenuRadioItem value="en" className="min-h-10">English</DropdownMenuRadioItem>
-            <DropdownMenuRadioItem value="es" className="min-h-10">Español</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="en">English</DropdownMenuRadioItem>
+            <DropdownMenuRadioItem value="es">Español</DropdownMenuRadioItem>
           </DropdownMenuRadioGroup>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -60,9 +60,9 @@ export function HeaderControls({ profile = mockClinician, onProfileOpen, onSignO
           <DropdownMenuContent align="end" className="w-60">
             <DropdownMenuLabel><Text className="text-sm font-medium">{profile.name}</Text><Text variant="small">{profile.role}</Text></DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="min-h-10" onSelect={() => { setDialog("profile"); onProfileOpen?.(); }}><UserRound />My profile</DropdownMenuItem>
+            <DropdownMenuItem onSelect={() => { setDialog("profile"); onProfileOpen?.(); }}><UserRound />My profile</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="min-h-10" variant="destructive" onSelect={() => { setDialog("sign-out"); onSignOutPreview?.(); }}><LogOut />Sign out</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => { setDialog("sign-out"); onSignOutPreview?.(); }}><LogOut />Sign out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

@@ -15,11 +15,11 @@ import { Card } from "@/components/ui/card";
 import { Heading, Text } from "@/shared/ui/typography";
 import type { Patient, Metric } from "@/flows/_mocks/orchestrator";
 
-export function Flag({ flag }: { flag: Patient["flag"] }) {
+export function Flag({ flag, size = "sm" }: { flag: Patient["flag"]; size?: "sm" | "md" }) {
   return (
     <Badge
       variant="outline"
-      className={`rounded-md border-transparent px-2 py-1 font-medium ${flag === "red" ? "bg-danger-soft text-danger" : flag === "yellow" ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
+      className={`rounded-full ${size === "md" && flag === "red" ? "border-danger/20" : size === "md" && flag === "yellow" ? "border-warning/20" : size === "md" ? "border-success/20" : "border-transparent"} font-medium ${size === "md" ? "h-8 gap-1.5 px-3 py-1 text-sm [&>svg]:size-3.5!" : "px-2 py-1"} ${flag === "red" ? "bg-danger-soft text-danger" : flag === "yellow" ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
     >
       {flag === "none" ? (
         <CircleCheck className="size-3" />
@@ -36,14 +36,14 @@ export function Flag({ flag }: { flag: Patient["flag"] }) {
     </Badge>
   );
 }
-export function TrackBadges({ tracks }: { tracks: string[] }) {
+export function TrackBadges({ tracks, size = "sm" }: { tracks: string[]; size?: "sm" | "md" }) {
   return (
-    <div className="flex flex-wrap gap-1">
+    <div className={`flex flex-wrap ${size === "md" ? "gap-3" : "gap-1"}`}>
       {tracks.map((t) => (
         <Badge
           key={t}
           variant="outline"
-          className="rounded-md border-border bg-muted/40 px-1.5 py-0.5 text-[10px] font-medium tracking-wide"
+          className={`rounded-full border-border bg-muted/40 font-medium tracking-wide ${size === "md" ? "h-8 px-3 py-1 text-sm" : "px-1.5 py-0.5 text-[10px]"}`}
         >
           {t}
         </Badge>

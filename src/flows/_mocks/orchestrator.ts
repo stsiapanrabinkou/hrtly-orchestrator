@@ -1,3 +1,5 @@
+import { paginationProfiles } from "./pagination-patients";
+
 /** Fictional presentation fixtures. Snapshot: 19 Oct 2026, 12:00 UTC.
  * WBS: Orchestrator (FULL) rows 23–31, 50–57, 108–113, 117–121.
  * No value, outcome, flag or projection is calculated in the interface.
@@ -126,7 +128,7 @@ const painMetrics: Metric[] = [
     target: "≥2-point reduction and functional improvement",
   },
 ];
-export const patients: Patient[] = [
+const originalPatients: Patient[] = [
   {
     id: "d1000000-0000-4000-8000-000000001001",
     displayId: "P-1001",
@@ -445,6 +447,14 @@ export const patients: Patient[] = [
     },
   },
 ];
+export const patients: Patient[] = [
+  ...originalPatients,
+  ...paginationProfiles.map(({ template, ...identity }) => ({
+    ...originalPatients[template],
+    ...identity,
+    recommendationId: undefined,
+  })),
+];
 export const recommendations = [
   {
     id: "outreach-1002",
@@ -531,7 +541,7 @@ export const monitoringViews: Record<
   all: {
     label: "All patients",
     rows: patients,
-    count: "8",
+    count: "72",
     alert: "all",
     track: "all",
     recency: "all",
@@ -541,8 +551,8 @@ export const monitoringViews: Record<
   },
   red: {
     label: "Red flags",
-    rows: [patients[0], patients[2]],
-    count: "2",
+    rows: [patients[0], patients[2], patients[8], patients[10], patients[16], patients[18], patients[24], patients[26], patients[32], patients[34], patients[40], patients[42], patients[48], patients[50], patients[56], patients[58], patients[64], patients[66]],
+    count: "18",
     alert: "red",
     track: "all",
     recency: "all",
@@ -552,8 +562,8 @@ export const monitoringViews: Record<
   },
   yellow: {
     label: "Yellow flags",
-    rows: [patients[1], patients[3]],
-    count: "2",
+    rows: [patients[1], patients[3], patients[9], patients[11], patients[17], patients[19], patients[25], patients[27], patients[33], patients[35], patients[41], patients[43], patients[49], patients[51], patients[57], patients[59], patients[65], patients[67]],
+    count: "18",
     alert: "yellow",
     track: "all",
     recency: "all",
@@ -563,8 +573,8 @@ export const monitoringViews: Record<
   },
   clear: {
     label: "No alerts",
-    rows: [patients[4], patients[5], patients[6], patients[7]],
-    count: "4",
+    rows: [patients[4], patients[5], patients[6], patients[7], patients[12], patients[13], patients[14], patients[15], patients[20], patients[21], patients[22], patients[23], patients[28], patients[29], patients[30], patients[31], patients[36], patients[37], patients[38], patients[39], patients[44], patients[45], patients[46], patients[47], patients[52], patients[53], patients[54], patients[55], patients[60], patients[61], patients[62], patients[63], patients[68], patients[69], patients[70], patients[71]],
+    count: "36",
     alert: "clear",
     track: "all",
     recency: "all",
@@ -574,8 +584,8 @@ export const monitoringViews: Record<
   },
   overdue: {
     label: "Monitoring gaps",
-    rows: [patients[1], patients[3], patients[5]],
-    count: "3",
+    rows: [patients[1], patients[3], patients[5], patients[9], patients[11], patients[13], patients[17], patients[19], patients[21], patients[25], patients[27], patients[29], patients[33], patients[35], patients[37], patients[41], patients[43], patients[45], patients[49], patients[51], patients[53], patients[57], patients[59], patients[61], patients[65], patients[67], patients[69]],
+    count: "27",
     alert: "all",
     track: "all",
     recency: "overdue",
@@ -585,8 +595,8 @@ export const monitoringViews: Record<
   },
   never: {
     label: "No measurements",
-    rows: [patients[7]],
-    count: "1",
+    rows: [patients[7], patients[15], patients[23], patients[31], patients[39], patients[47], patients[55], patients[63], patients[71]],
+    count: "9",
     alert: "all",
     track: "all",
     recency: "never",
@@ -596,8 +606,8 @@ export const monitoringViews: Record<
   },
   ckm: {
     label: "CKM patients",
-    rows: [patients[0], patients[1], patients[4], patients[5]],
-    count: "4",
+    rows: [patients[0], patients[1], patients[4], patients[5], patients[8], patients[9], patients[12], patients[13], patients[16], patients[17], patients[20], patients[21], patients[24], patients[25], patients[28], patients[29], patients[32], patients[33], patients[36], patients[37], patients[40], patients[41], patients[44], patients[45], patients[48], patients[49], patients[52], patients[53], patients[56], patients[57], patients[60], patients[61], patients[64], patients[65], patients[68], patients[69]],
+    count: "36",
     alert: "all",
     track: "ckm",
     recency: "all",
@@ -607,8 +617,8 @@ export const monitoringViews: Record<
   },
   eckm: {
     label: "eCKM patients",
-    rows: [patients[7]],
-    count: "1",
+    rows: [patients[7], patients[15], patients[23], patients[31], patients[39], patients[47], patients[55], patients[63], patients[71]],
+    count: "9",
     alert: "all",
     track: "eckm",
     recency: "all",
@@ -618,8 +628,8 @@ export const monitoringViews: Record<
   },
   bh: {
     label: "BH patients",
-    rows: [patients[2], patients[3], patients[4]],
-    count: "3",
+    rows: [patients[2], patients[3], patients[4], patients[10], patients[11], patients[12], patients[18], patients[19], patients[20], patients[26], patients[27], patients[28], patients[34], patients[35], patients[36], patients[42], patients[43], patients[44], patients[50], patients[51], patients[52], patients[58], patients[59], patients[60], patients[66], patients[67], patients[68]],
+    count: "27",
     alert: "all",
     track: "bh",
     recency: "all",
@@ -629,8 +639,8 @@ export const monitoringViews: Record<
   },
   msk: {
     label: "MSK patients",
-    rows: [patients[6]],
-    count: "1",
+    rows: [patients[6], patients[14], patients[22], patients[30], patients[38], patients[46], patients[54], patients[62], patients[70]],
+    count: "9",
     alert: "all",
     track: "msk",
     recency: "all",
@@ -640,8 +650,8 @@ export const monitoringViews: Record<
   },
   gap: {
     label: "CKM blood pressure gaps",
-    rows: [patients[1], patients[5]],
-    count: "2",
+    rows: [patients[1], patients[5], patients[9], patients[13], patients[17], patients[21], patients[25], patients[29], patients[33], patients[37], patients[41], patients[45], patients[49], patients[53], patients[57], patients[61], patients[65], patients[69]],
+    count: "18",
     alert: "all",
     track: "ckm",
     recency: "overdue",
@@ -674,17 +684,8 @@ export const monitoringViews: Record<
   },
   name: {
     label: "Name A–Z",
-    rows: [
-      patients[5],
-      patients[0],
-      patients[6],
-      patients[4],
-      patients[7],
-      patients[2],
-      patients[1],
-      patients[3],
-    ],
-    count: "8",
+    rows: [patients[5], patients[0], patients[6], patients[4], patients[7], patients[2], patients[1], patients[3], patients[8], patients[9], patients[10], patients[11], patients[12], patients[13], patients[14], patients[15], patients[16], patients[17], patients[18], patients[19], patients[20], patients[21], patients[22], patients[23], patients[24], patients[25], patients[26], patients[27], patients[28], patients[29], patients[30], patients[31], patients[32], patients[33], patients[34], patients[35], patients[36], patients[37], patients[38], patients[39], patients[40], patients[41], patients[42], patients[43], patients[44], patients[45], patients[46], patients[47], patients[48], patients[49], patients[50], patients[51], patients[52], patients[53], patients[54], patients[55], patients[56], patients[57], patients[58], patients[59], patients[60], patients[61], patients[62], patients[63], patients[64], patients[65], patients[66], patients[67], patients[68], patients[69], patients[70], patients[71]],
+    count: "72",
     alert: "all",
     track: "all",
     recency: "all",
@@ -694,17 +695,8 @@ export const monitoringViews: Record<
   },
   recency: {
     label: "Oldest measurement first",
-    rows: [
-      patients[5],
-      patients[1],
-      patients[3],
-      patients[2],
-      patients[6],
-      patients[0],
-      patients[4],
-      patients[7],
-    ],
-    count: "8",
+    rows: [patients[5], patients[1], patients[3], patients[2], patients[6], patients[0], patients[4], patients[7], patients[8], patients[9], patients[10], patients[11], patients[12], patients[13], patients[14], patients[15], patients[16], patients[17], patients[18], patients[19], patients[20], patients[21], patients[22], patients[23], patients[24], patients[25], patients[26], patients[27], patients[28], patients[29], patients[30], patients[31], patients[32], patients[33], patients[34], patients[35], patients[36], patients[37], patients[38], patients[39], patients[40], patients[41], patients[42], patients[43], patients[44], patients[45], patients[46], patients[47], patients[48], patients[49], patients[50], patients[51], patients[52], patients[53], patients[54], patients[55], patients[56], patients[57], patients[58], patients[59], patients[60], patients[61], patients[62], patients[63], patients[64], patients[65], patients[66], patients[67], patients[68], patients[69], patients[70], patients[71]],
+    count: "72",
     alert: "all",
     track: "all",
     recency: "all",
@@ -751,7 +743,7 @@ export const monitoringViews: Record<
   stale: {
     label: "Refresh failed",
     rows: patients,
-    count: "8",
+    count: "72",
     alert: "all",
     track: "all",
     recency: "all",
@@ -782,11 +774,11 @@ export const monitoringViews: Record<
   },
 };
 export const cohortStats = {
-  all: ["8", "2", "2", "3"],
-  ckm: ["4", "1", "1", "2"],
-  eckm: ["1", "0", "0", "0"],
-  bh: ["3", "1", "1", "1"],
-  msk: ["1", "0", "0", "0"],
+  all: ["72", "18", "18", "27"],
+  ckm: ["36", "9", "9", "18"],
+  eckm: ["9", "0", "0", "0"],
+  bh: ["27", "9", "9", "9"],
+  msk: ["9", "0", "0", "0"],
   empty: ["0", "0", "0", "0"],
 };
 export const demoThomas = patients[1];

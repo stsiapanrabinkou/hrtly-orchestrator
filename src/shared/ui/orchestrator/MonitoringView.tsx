@@ -1,18 +1,21 @@
-import { useState } from "react";
+import { dropdownStyles } from "@/shared/ui/dropdown-styles";
+import { useRef, useState } from "react";
 import {
   Search,
   ArrowRight,
-  ArrowDownWideNarrow,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
   RefreshCw,
-  UsersRound,
   CircleAlert,
   AlertTriangle,
   Clock3,
   ListFilter,
   X,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Info,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -42,6 +45,7 @@ import {
   SheetDescription,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuCheckboxItem, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Heading, Text } from "@/shared/ui/typography";
 import { Shell } from "./Shell";
@@ -51,6 +55,8 @@ import {
   cohortStats,
   type Patient,
 } from "@/flows/_mocks/orchestrator";
+import { combinedCareTrackStats } from "@/flows/_mocks/care-track-stats";
+import { careGapInsights } from "@/flows/_mocks/care-gap-insights";
 import { preparedViews } from "@/flows/_mocks/prepared-views";
 
 type Props = {
@@ -58,64 +64,111 @@ type Props = {
   views?: typeof monitoringViews;
   presets?: typeof preparedViews;
   stats?: typeof cohortStats;
+  insights?: typeof careGapInsights;
+  trackStats?: typeof combinedCareTrackStats;
   onViewChange?: (view: string) => void;
   appBase?: string;
 };
+const careTracks = ["ckm", "eckm", "bh", "msk"];
+const trackLabel = (track: string) => track === "eckm" ? "eCKM" : track.toUpperCase();
+
+type SortColumn = "name" | "track" | "risk" | "alert" | "recency";
+type SortDirection = "ascending" | "descending";
+
+type PatientSorting = { column: SortColumn; direction: SortDirection };
+
+function sortPatients(rows: Patient[], sorting: PatientSorting) {
+  const sortValue = (patient: Patient): string | number => {
+    switch (sorting.column) {
+      case "name": return patient.name;
+      case "track": return patient.tracks.join(", ");
+      case "risk": return Number(patient.risk);
+      case "alert": return { red: 0, yellow: 1, none: 2 }[patient.flag];
+      // The snapshot's display dates omit the year; use a common leap year to compare them.
+      case "recency": return Date.parse(patient.lastDate.replace(" · ", ", 2000 "));
+    }
+  };
+  const sortedRows = [...rows].sort((a, b) => {
+    const first = sortValue(a);
+    const second = sortValue(b);
+    // Missing risk scores and measurements stay at the end in either direction.
+    if (typeof first === "number" && Number.isNaN(first)) {
+      return typeof second === "number" && Number.isNaN(second) ? 0 : 1;
+    }
+    if (typeof second === "number" && Number.isNaN(second)) return -1;
+    const order = typeof first === "string" && typeof second === "string"
+      ? first.localeCompare(second)
+      : Number(first) - Number(second);
+    return sorting.direction === "ascending" ? order : -order;
+  });
+  return sortedRows;
+}
+
 function PatientRows({
   rows,
   view,
   appBase,
-  sort,
+  sorting,
+  onSort,
 }: {
   rows: Patient[];
   view: string;
   appBase: string;
-  sort: string;
+  sorting: PatientSorting;
+  onSort: (sorting: PatientSorting) => void;
 }) {
+  const columns: { key: SortColumn; label: string; className?: string }[] = [
+    { key: "name", label: "Patient", className: "w-[21%] pl-5" },
+    { key: "track", label: "Care track", className: "w-[11%]" },
+    { key: "risk", label: "Risk", className: "w-[7%] text-right" },
+    { key: "alert", label: "Alert status", className: "w-[15%]" },
+    { key: "recency", label: "Last measurement", className: "w-[21%]" },
+  ];
   return (
     <>
       <div className="hidden xl:block">
-        <Table>
-          <TableCaption className="sr-only">
-            Active monitored patients. Dates and times use UTC.
-          </TableCaption>
-          <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead
-                aria-sort={sort === "name" ? "ascending" : undefined}
-                className="w-[22%] pl-5"
-              >
-                Patient
+    <Table className="min-w-[960px] table-fixed">
+      <TableCaption className="sr-only">
+        Active monitored patients. Dates and times use UTC. Select a column heading to sort.
+      </TableCaption>
+      <TableHeader>
+        <TableRow className="bg-muted/40 hover:bg-muted/40">
+          {columns.map(({ key, label, className }) => {
+            const active = sorting.column === key;
+            const Icon = active ? sorting.direction === "ascending" ? ArrowUp : ArrowDown : ArrowUpDown;
+            return (
+              <TableHead key={key} className={className} aria-sort={active ? sorting.direction : undefined}>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className={`-mx-2 h-10 gap-1.5 px-2 text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}
+                  onClick={() => onSort({
+                    column: key,
+                    direction: active
+                      ? sorting.direction === "ascending" ? "descending" : "ascending"
+                      : key === "risk" ? "descending" : "ascending",
+                  })}
+                >
+                  {label}
+                  <Icon aria-hidden="true" className="size-3.5" />
+                </Button>
               </TableHead>
-              <TableHead>Track</TableHead>
-              <TableHead
-                aria-sort={sort === "risk" ? "descending" : undefined}
-                className="text-right"
-              >
-                Risk
-              </TableHead>
-              <TableHead>Alert status</TableHead>
-              <TableHead
-                aria-sort={sort === "recency" ? "ascending" : undefined}
-              >
-                Last measurement
-              </TableHead>
-              <TableHead>Latest values</TableHead>
-              <TableHead>
-                <span className="sr-only">Open patient</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
+            );
+          })}
+          <TableHead className="w-[19%] text-xs text-muted-foreground">Latest values</TableHead>
+          <TableHead className="w-[6%]"><span className="sr-only">Open patient</span></TableHead>
+        </TableRow>
+      </TableHeader>
           <TableBody>
             {rows.map((p) => (
               <TableRow
                 key={p.id}
                 id={`patient-${p.displayId}`}
-                className={`scroll-mt-28 ${p.displayId === "P-1002" ? "bg-accent/30 hover:bg-accent/50" : "hover:bg-muted/40"}`}
+                className="relative scroll-mt-28 cursor-pointer hover:bg-muted/40 has-focus-visible:bg-muted/40"
               >
-                <TableCell className="py-4 pl-5">
+                <TableCell className="py-3 pl-5">
                   <a
-                    className="inline-block rounded-sm font-semibold text-foreground underline-offset-4 hover:text-primary hover:underline"
+                    className="inline-block rounded-sm font-semibold text-foreground underline-offset-4 after:absolute after:inset-0 hover:text-primary hover:underline"
                     href={`${appBase}/patients/${p.id}/from/${view}`}
                   >
                     {p.name}
@@ -128,17 +181,11 @@ function PatientRows({
                 <TableCell>
                   <TrackBadges tracks={p.tracks} />
                 </TableCell>
-                <TableCell className="text-right align-top pt-5 font-medium tabular-nums">
+                <TableCell className="whitespace-normal text-right font-medium tabular-nums">
                   {p.risk}
                 </TableCell>
                 <TableCell>
                   <Flag flag={p.flag} />
-                  <Text
-                    variant="small"
-                    className="mt-1.5 max-w-44 whitespace-normal"
-                  >
-                    {p.reason}
-                  </Text>
                 </TableCell>
                 <TableCell>
                   <Text
@@ -158,7 +205,7 @@ function PatientRows({
                   </Text>
                 </TableCell>
                 <TableCell>
-                  <Text className="font-medium tabular-nums">{p.reading}</Text>
+                  <Text className="whitespace-normal font-medium tabular-nums">{p.reading}</Text>
                   <Text variant="small" className="mt-1">
                     {p.readingDate}
                   </Text>
@@ -168,6 +215,7 @@ function PatientRows({
                     <a
                       href={`${appBase}/patients/${p.id}/from/${view}`}
                       aria-label={`Open patient ${p.name}`}
+                      className="relative z-10"
                     >
                       <ChevronRight />
                     </a>
@@ -176,7 +224,7 @@ function PatientRows({
               </TableRow>
             ))}
           </TableBody>
-        </Table>
+    </Table>
       </div>
       <div className="divide-y xl:hidden">
         {rows.map((p) => (
@@ -199,7 +247,6 @@ function PatientRows({
               </div>
               <Flag flag={p.flag} />
             </div>
-            <Text className="mb-3">{p.reason}</Text>
             <div className="flex items-center justify-between">
               <TrackBadges tracks={p.tracks} />
               <Text variant="small">
@@ -244,43 +291,116 @@ export function MonitoringView({
   views = monitoringViews,
   presets = preparedViews,
   stats = cohortStats,
+  insights = careGapInsights,
+  trackStats = combinedCareTrackStats,
   onViewChange,
   appBase = "",
 }: Props) {
   const state = views[view] ?? presets[view] ?? views.all;
+  const [sorting, setSorting] = useState<PatientSorting>({
+    column: state.sort === "name" || state.sort === "recency" ? state.sort : "risk",
+    direction: state.sort === "risk" ? "descending" : "ascending",
+  });
+  const [pageSize, setPageSize] = useState(10);
+  const [pageJump, setPageJump] = useState("");
   const [query, setQuery] = useState(state.query);
+  const searchInput = useRef<HTMLInputElement>(null);
+  const [filtersChanged, setFiltersChanged] = useState(false);
+  const [selection, setSelection] = useState({
+    alert: state.alert,
+    recency: state.recency,
+    tracks: state.track === "all" ? [] : [state.track],
+  });
+  const tracksLabel = selection.tracks.length ? selection.tracks.map(trackLabel).join(", ") : "All tracks";
+  const initialCohort = state.query
+    ? presets[`${state.alert}-${state.track}-${state.recency}-${state.sort}`] ?? views.all
+    : state;
+  const selectedRows = (selection.tracks.length ? selection.tracks : ["all"]).flatMap(
+    (track) => (presets[`${selection.alert}-${track}-${selection.recency}-${state.sort}`]?.rows ?? []),
+  );
+  const cohortRows = filtersChanged && !["loading", "error", "empty"].includes(state.mode ?? "")
+    ? [...new Map(selectedRows.map((patient) => [patient.id, patient])).values()]
+    : initialCohort.rows;
+  const searchTerm = query.trim().toLocaleLowerCase();
+  const rows = searchTerm.length >= 2
+    ? cohortRows.filter((patient) =>
+        patient.name.toLocaleLowerCase().includes(searchTerm) ||
+        patient.displayId.toLocaleLowerCase().includes(searchTerm),
+      )
+    : cohortRows;
+  const count = rows.length;
+  const sortedRows = sortPatients(rows, sorting);
+  const [page, setPage] = useState(() => {
+    const target = typeof window === "undefined" ? "" : window.location.hash.slice(1);
+    const index = sortedRows.findIndex((patient) => `patient-${patient.displayId}` === target);
+    return index < 0 ? 1 : Math.floor(index / 10) + 1;
+  });
+  const pageCount = Math.max(1, Math.ceil(count / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * pageSize;
+  const pageRows = sortedRows.slice(pageStart, pageStart + pageSize);
+  const visiblePages = pageCount <= 7
+    ? Array.from({ length: pageCount }, (_, index) => index + 1)
+    : [...new Set([
+        1,
+        pageCount,
+        ...(currentPage <= 3 ? [2, 3, 4]
+          : currentPage >= pageCount - 2 ? [pageCount - 3, pageCount - 2, pageCount - 1]
+          : [currentPage - 1, currentPage, currentPage + 1]),
+      ])].sort((a, b) => a - b);
+  const fixedMode = initialCohort.mode === "no-results" ? undefined : initialCohort.mode;
+  const mode = !fixedMode || fixedMode === "stale"
+    ? rows.length === 0 ? "no-results" : fixedMode
+    : fixedMode;
+  const chips = [
+    ...selection.tracks.map(trackLabel),
+    ...(selection.alert !== "all" ? [{ red: "Red flag", yellow: "Yellow flag", clear: "No alerts" }[selection.alert]] : []),
+    ...(selection.recency !== "all" ? [selection.recency === "never" ? "No measurements" : "More than 7 days"] : []),
+  ];
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
   const go = (next: string) => {
+    setPage(1);
+    if (next === "all") {
+      setSelection({ alert: "all", recency: "all", tracks: [] });
+      setFiltersChanged(true);
+      setQuery("");
+    }
     setFiltersOpen(false);
+    setInsightsOpen(false);
     onViewChange?.(next);
   };
-  const choose = (
-    field: "alert" | "track" | "recency" | "sort",
-    value: string,
-  ) => {
-    const selection = {
-      alert: state.alert,
-      track: state.track,
-      recency: state.recency,
-      sort: state.sort,
-      [field]: value,
-    };
-    go(
-      `${selection.alert}-${selection.track}-${selection.recency}-${selection.sort}`,
-    );
+  const choose = (field: "alert" | "recency", value: string) => {
+    setPage(1);
+    setSelection((current) => ({ ...current, [field]: value }));
+    setFiltersChanged(true);
   };
-  const group = stats[state.track as keyof typeof stats] ?? stats.all;
+  const toggleTrack = (track: string) => {
+    setPage(1);
+    setSelection((current) => ({
+      ...current,
+      tracks: careTracks.filter((candidate) => candidate === track
+        ? !current.tracks.includes(candidate)
+        : current.tracks.includes(candidate)),
+    }));
+    setFiltersChanged(true);
+  };
+  const group = selection.tracks.length > 1
+    ? trackStats[selection.tracks.join(",")] ?? stats.all
+    : stats[(selection.tracks[0] ?? "all") as keyof typeof stats] ?? stats.all;
   const numbers = state.mode === "empty" ? stats.empty : group;
   const unavailable = state.mode === "loading" || state.mode === "error";
-  const showGap = state.track === "all" || state.track === "ckm";
+  const visibleInsights = state.mode === "empty" ? [] : insights.filter(
+    (insight) => selection.tracks.length === 0 || selection.tracks.includes(insight.track),
+  );
   const filters = (
-    <div className="grid gap-4 sm:grid-cols-3">
+    <div className="grid gap-4">
       <div className="space-y-1.5">
         <Label htmlFor="alert-filter" className="text-xs text-muted-foreground">
           Alert status
         </Label>
-        <Select value={state.alert} onValueChange={(v) => choose("alert", v)}>
-          <SelectTrigger id="alert-filter" className="h-10 w-full bg-card">
+        <Select value={selection.alert} onValueChange={(v) => choose("alert", v)}>
+          <SelectTrigger id="alert-filter" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -295,18 +415,34 @@ export function MonitoringView({
         <Label htmlFor="track-filter" className="text-xs text-muted-foreground">
           Care track
         </Label>
-        <Select value={state.track} onValueChange={(v) => choose("track", v)}>
-          <SelectTrigger id="track-filter" className="h-10 w-full bg-card">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All tracks</SelectItem>
-            <SelectItem value="ckm">CKM</SelectItem>
-            <SelectItem value="eckm">eCKM</SelectItem>
-            <SelectItem value="bh">BH</SelectItem>
-            <SelectItem value="msk">MSK</SelectItem>
-          </SelectContent>
-        </Select>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button id="track-filter" variant="outline" className={`${dropdownStyles.trigger} w-full`} title={tracksLabel}>
+              <span className="min-w-0 truncate">{tracksLabel}</span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="bottom" align="start">
+            <DropdownMenuCheckboxItem
+              checked={selection.tracks.length === 0}
+              onSelect={(event) => event.preventDefault()}
+              onCheckedChange={() => {
+                setPage(1);
+                setSelection((current) => ({ ...current, tracks: [] }));
+                setFiltersChanged(true);
+              }}
+            >All tracks</DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            {careTracks.map((track) => (
+              <DropdownMenuCheckboxItem
+                key={track}
+                checked={selection.tracks.includes(track)}
+                onSelect={(event) => event.preventDefault()}
+                onCheckedChange={() => toggleTrack(track)}
+              >{trackLabel(track)}</DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
       <div className="space-y-1.5">
         <Label
@@ -316,10 +452,10 @@ export function MonitoringView({
           Measurement recency
         </Label>
         <Select
-          value={state.recency}
+          value={selection.recency}
           onValueChange={(v) => choose("recency", v)}
         >
-          <SelectTrigger id="recency-filter" className="h-10 w-full bg-card">
+          <SelectTrigger id="recency-filter" className="w-full">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -332,16 +468,10 @@ export function MonitoringView({
     </div>
   );
   return (
-    <Shell appBase={appBase}>
-      <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <Text className="section-kicker mb-2">Patient monitoring</Text>
-          <Heading level={1}>Monitoring</Heading>
-          <Text variant="muted" className="mt-2">
-            Active patients and signals that need your attention.
-          </Text>
-        </div>
-        <div className="flex items-center gap-3">
+    <Shell appBase={appBase} showFooter={false}>
+      <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
+        <Heading level={1}>Monitoring</Heading>
+        <div className="flex flex-wrap items-center gap-3">
           <Text variant="small" className="hidden text-right sm:block">
             Snapshot updated
             <br />
@@ -359,49 +489,26 @@ export function MonitoringView({
           </Button>
         </div>
       </div>
-      <div className="mb-3 flex items-center justify-between">
-        <Text variant="small">
-          In the selected cohort ·{" "}
-          {state.track === "all"
-            ? "All care tracks"
-            : state.track.toUpperCase()}
-        </Text>
-        <Text variant="small" className="hidden sm:block">
-          Counts represent patients, not events
-        </Text>
-      </div>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          "Active patients",
           "Red flags",
           "Yellow flags",
           "No measurements >7 days",
         ].map((label, i) => {
-          const Icon = [UsersRound, CircleAlert, AlertTriangle, Clock3][i];
-          const next =
-            i === 0 ? "all" : i === 1 ? "red" : i === 2 ? "yellow" : "overdue";
-          const tone =
-            i === 1
-              ? "text-danger bg-danger-soft"
-              : i === 2
-                ? "text-warning bg-warning-soft"
-                : i === 3
-                  ? "text-primary bg-accent"
-                  : "text-muted-foreground bg-muted";
+          const Icon = [CircleAlert, AlertTriangle, Clock3][i];
+          const next = i === 0 ? "red" : i === 1 ? "yellow" : "overdue";
+          const tone = i === 0
+            ? "text-danger bg-danger-soft"
+            : i === 1
+              ? "text-warning bg-warning-soft"
+              : "text-primary bg-accent";
           return (
             <Card key={label} className="gap-0 rounded-xl p-0 shadow-none">
               <Button
                 variant="ghost"
                 className="flex h-full min-h-32 w-full flex-col items-start gap-3 whitespace-normal rounded-xl p-4 text-left hover:bg-muted/40 sm:p-5"
                 disabled={unavailable}
-                onClick={() =>
-                  i === 0
-                    ? go(`all-${state.track}-all-${state.sort}`)
-                    : choose(
-                        i === 3 ? "recency" : "alert",
-                        i === 3 ? "overdue" : next,
-                      )
-                }
+                onClick={() => choose(i === 2 ? "recency" : "alert", next)}
               >
                 <div className="flex w-full items-center justify-between gap-2">
                   <Text as="span" variant="small" className="font-medium">
@@ -417,40 +524,83 @@ export function MonitoringView({
                   <Skeleton className="h-9 w-12" />
                 ) : (
                   <span className="text-3xl font-semibold tracking-tight tabular-nums">
-                    {numbers[i]}
+                    {numbers[i + 1]}
                   </span>
                 )}
               </Button>
             </Card>
           );
         })}
+          <Sheet open={insightsOpen} onOpenChange={setInsightsOpen}>
+            <Card className="gap-0 rounded-xl bg-secondary text-primary p-0 shadow-none">
+              <SheetTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex h-full min-h-32 w-full flex-col items-start gap-3 whitespace-normal rounded-xl p-4 text-left text-primary hover:bg-secondary-hover hover:text-primary sm:p-5"
+                  disabled={unavailable}
+                >
+                  <div className="flex w-full items-center justify-between gap-2">
+                    <Text as="span" variant="small" className="font-medium text-primary">Care gap insights</Text>
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-card/50 text-primary">
+                      <ClipboardList className="size-3.5" />
+                    </span>
+                  </div>
+                  <div className="flex w-full items-baseline justify-between gap-2">
+                    {unavailable ? (
+                      <Skeleton className="h-9 w-12" />
+                    ) : (
+                      <span className="text-3xl font-semibold tracking-tight tabular-nums">
+                        {visibleInsights.length}
+                      </span>
+                    )}
+                    <span className="inline-flex items-baseline gap-1.5 pr-[7px] text-xs text-primary">
+                      View all <ArrowRight className="size-3.5 self-center" />
+                    </span>
+                  </div>
+                </Button>
+              </SheetTrigger>
+            </Card>
+            <SheetContent className="gap-0 data-[side=right]:top-(--devbar-height) data-[side=right]:h-[calc(100svh-var(--devbar-height))] data-[side=right]:w-full data-[side=right]:sm:max-w-lg">
+              <div className="shrink-0 border-b p-5 pr-12">
+                <SheetTitle className="flex items-center gap-2">
+                  Care gap insights
+                  <Badge variant="secondary">{visibleInsights.length}</Badge>
+                </SheetTitle>
+                <SheetDescription className="sr-only">
+                  Monitoring gaps across {selection.tracks.length ? tracksLabel : "all care tracks"}.
+                </SheetDescription>
+                <Text variant="small" className="mt-2">Updated Oct 19, 2026 · 12:00 UTC</Text>
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                {visibleInsights.length ? (
+                  <div className="space-y-4">
+                    {visibleInsights.map((insight) => (
+                      <Card key={insight.id} className="gap-0 rounded-xl p-5 shadow-none">
+                        <Badge variant="secondary" className="mb-3">{insight.track === "eckm" ? "eCKM" : insight.track.toUpperCase()}</Badge>
+                        <Heading level={3} as="h3">{insight.title}</Heading>
+                        <Text variant="muted" className="mt-2">{insight.summary}</Text>
+                        <div className="mt-4 border-t pt-3">
+                          <Text variant="small" className="font-medium text-foreground">Suggested action</Text>
+                          <Text variant="small" className="mt-1 leading-relaxed">{insight.action}</Text>
+                        </div>
+                        <Button variant="outline" className="mt-4 w-full" onClick={() => go(insight.view)}>
+                          View patients
+                          <ArrowRight className="size-4" />
+                        </Button>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-dashed p-6 text-center">
+                    <ClipboardList className="mx-auto mb-3 size-6 text-muted-foreground" />
+                    <Heading level={3} as="h3">No care gap insights</Heading>
+                    <Text variant="muted" className="mt-2">There are no summaries for this cohort in the current snapshot.</Text>
+                  </div>
+                )}
+              </div>
+            </SheetContent>
+          </Sheet>
       </div>
-      {!unavailable && state.mode !== "empty" && showGap ? (
-        <div className="mb-7 flex flex-wrap items-center gap-4 rounded-xl border border-primary/15 bg-accent/50 px-5 py-4">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-card text-primary">
-            <ActivityIcon />
-          </div>
-          <div className="flex-1">
-            <Text className="font-semibold">
-              Blood pressure monitoring gaps
-            </Text>
-            <Text variant="muted" className="mt-1">
-              2 of 4 CKM patients have no blood pressure readings for more than
-              7 days.
-            </Text>
-          </div>
-          <Button
-            variant="ghost"
-            className="text-primary"
-            onClick={() => go("gap")}
-          >
-            View patients
-            <ArrowRight className="size-4" />
-          </Button>
-        </div>
-      ) : (
-        <div className="mb-6" />
-      )}
       {state.mode === "stale" ? (
         <div
           role="alert"
@@ -468,34 +618,19 @@ export function MonitoringView({
       ) : null}
       <section
         aria-label="Monitored patients"
-        className="clinical-panel overflow-hidden"
+        className="clinical-panel overflow-hidden [overflow-anchor:none]"
       >
         <div className="border-b p-5">
           <div className="mb-5 flex items-center justify-between gap-3">
-            <Heading level={3} as="h2">
-              Patients{" "}
-              <span className="ml-2 rounded-md bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                {state.count}
+            <Heading level={3} as="h2" className="flex items-center gap-2">
+              Patients
+              <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                {count}
               </span>
             </Heading>
-            <Text variant="small" className="hidden sm:block">
-              Active enrollment only
-            </Text>
           </div>
-          <div className="flex items-end gap-3">
-            <form
-              className="min-w-0 flex-1 lg:max-w-sm"
-              onSubmit={(e) => {
-                e.preventDefault();
-                go(
-                  query === "Thomas Reed" || query === "P-1002"
-                    ? "search"
-                    : query === ""
-                      ? "all"
-                      : "no-results",
-                );
-              }}
-            >
+          <div className="flex items-end gap-4 lg:grid lg:grid-cols-4">
+            <div className="min-w-0 flex-1">
               <Label
                 htmlFor="patient-search"
                 className="mb-1.5 block text-xs text-muted-foreground"
@@ -505,31 +640,40 @@ export function MonitoringView({
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
                 <Input
+                  ref={searchInput}
                   id="patient-search"
-                  className="h-10 bg-card pl-9 pr-20"
+                  className="h-10 bg-card pl-9 pr-10"
                   placeholder="Name or patient ID"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                   autoComplete="off"
                 />
-                <Button
-                  size="sm"
-                  type="submit"
-                  variant="ghost"
-                  className="absolute right-1 top-1 h-8"
-                >
-                  Search
-                </Button>
+                {query.length > 0 ? (
+                  <Button
+                    size="icon-sm"
+                    type="button"
+                    variant="ghost"
+                    className="absolute right-1 top-1 size-8"
+                    aria-label="Clear search"
+                    onClick={() => {
+                      setPage(1);
+                      setQuery("");
+                      searchInput.current?.focus({ preventScroll: true });
+                    }}
+                  >
+                    <X className="size-4" />
+                  </Button>
+                ) : null}
               </div>
-            </form>
-            <div className="hidden flex-1 lg:block">{filters}</div>
+            </div>
+            <div className="hidden lg:col-span-3 lg:block [&>div]:grid-cols-3">{filters}</div>
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
               <SheetTrigger asChild>
                 <Button variant="outline" className="h-10 lg:hidden">
                   <ListFilter />
                   Filters
-                  {state.chips.length ? (
-                    <Badge variant="secondary">{state.chips.length}</Badge>
+                  {chips.length ? (
+                    <Badge variant="secondary">{chips.length}</Badge>
                   ) : null}
                 </Button>
               </SheetTrigger>
@@ -549,16 +693,16 @@ export function MonitoringView({
               </SheetContent>
             </Sheet>
           </div>
-          {state.chips.length ? (
+          {chips.length ? (
             <div
               className="mt-4 flex flex-wrap items-center gap-2"
               aria-label="Applied filters"
             >
-              {state.chips.map((c) => (
+              {chips.map((c) => (
                 <Badge
                   key={c}
                   variant="secondary"
-                  className="rounded-md px-2 py-1"
+                  className="rounded-full px-2 py-1"
                 >
                   {c}
                 </Badge>
@@ -575,80 +719,98 @@ export function MonitoringView({
             </div>
           ) : null}
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b bg-muted/20 px-5 py-3">
-          <Text variant="small" aria-live="polite">
-            {unavailable
-              ? "Patient data unavailable"
-              : `${state.count} patients shown`}
-          </Text>
-          <div className="flex items-center gap-2">
-            <ArrowDownWideNarrow className="size-3.5 text-muted-foreground" />
-            <Label htmlFor="sort-order" className="sr-only">
-              Sort patients
-            </Label>
-            <Select value={state.sort} onValueChange={(v) => choose("sort", v)}>
-              <SelectTrigger
-                id="sort-order"
-                className="h-8 border-0 text-xs shadow-none"
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="risk">Risk: high to low</SelectItem>
-                <SelectItem value="recency">
-                  Measurement: oldest first
-                </SelectItem>
-                <SelectItem value="name">Name: A–Z</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-        {state.mode && state.mode !== "stale" ? (
-          <BlankState kind={state.mode} onReset={() => go("all")} />
+        {mode && mode !== "stale" ? (
+          <BlankState kind={mode} onReset={() => { setQuery(""); go("all"); }} />
         ) : (
           <PatientRows
-            rows={state.rows}
+            rows={pageRows}
             view={view}
             appBase={appBase}
-            sort={state.sort}
+            sorting={sorting}
+            onSort={(next) => { setSorting(next); setPage(1); }}
           />
         )}
         <div className="flex flex-wrap items-center justify-between gap-3 border-t px-5 py-4">
-          <Text variant="small">
-            {unavailable ? "—" : `${state.count} patients`} · One row per
-            patient
+          <Text variant="small" aria-live="polite">
+            {unavailable ? "Patient data unavailable" : count === 0 ? "0 records shown" : `${pageStart + 1}–${pageStart + pageRows.length} of ${count} records shown`}
           </Text>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Label htmlFor="patients-page-size" className="text-xs text-muted-foreground">Rows per page</Label>
+              <Select value={String(pageSize)} onValueChange={(value) => { setPageSize(Number(value)); setPage(1); }} disabled={unavailable}>
+                <SelectTrigger id="patients-page-size" className="w-20"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="25">25</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <nav aria-label="Patient pagination" className="flex items-center gap-1">
             <Button
               variant="outline"
               size="icon-sm"
-              disabled
+              disabled={unavailable || currentPage === 1}
+              onClick={() => setPage(currentPage - 1)}
               aria-label="Previous page"
             >
               <ChevronLeft />
             </Button>
-            <Text variant="small">Page 1 of 1</Text>
+            {visiblePages.map((number, index) => (
+              <span key={number} className="inline-flex items-center gap-1">
+                {index > 0 && number - visiblePages[index - 1] > 1 ? (
+                  <span className="px-1 text-muted-foreground" aria-hidden="true">…</span>
+                ) : null}
+                <Button
+                  variant={number === currentPage ? "default" : "outline"}
+                  size="icon-sm"
+                  aria-label={`Go to page ${number}`}
+                  aria-current={number === currentPage ? "page" : undefined}
+                  disabled={unavailable}
+                  onClick={() => setPage(number)}
+                >{number}</Button>
+              </span>
+            ))}
             <Button
               variant="outline"
               size="icon-sm"
-              disabled
+              disabled={unavailable || currentPage === pageCount}
+              onClick={() => setPage(currentPage + 1)}
               aria-label="Next page"
             >
               <ChevronRight />
             </Button>
+            </nav>
+            <form
+              className="flex items-center gap-2"
+              noValidate
+              onSubmit={(event) => {
+                event.preventDefault();
+                const target = Number(pageJump);
+                if (!pageJump.trim() || !Number.isFinite(target)) return;
+                setPage(Math.max(1, Math.min(pageCount, Math.floor(target))));
+                setPageJump("");
+              }}
+            >
+              <Label htmlFor="patients-page-jump" className="text-xs text-muted-foreground">Go to</Label>
+              <Input
+                id="patients-page-jump"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={pageCount}
+                step={1}
+                className="h-7 w-16 bg-card px-2 text-xs"
+                placeholder={String(currentPage)}
+                value={pageJump}
+                onChange={(event) => setPageJump(event.target.value)}
+                disabled={unavailable || count === 0}
+              />
+              <Button type="submit" variant="outline" size="sm" disabled={unavailable || count === 0 || !pageJump.trim()}>Go</Button>
+            </form>
           </div>
         </div>
       </section>
-      <div className="mt-4 flex gap-2">
-        <Info className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-        <Text variant="small" className="leading-relaxed">
-          Risk, alert status, and monitoring gaps are separate signals. Latest measurement may be any tracked metric;
-          individual values show their own dates.
-        </Text>
-      </div>
     </Shell>
   );
-}
-function ActivityIcon() {
-  return <ListFilter className="size-4" />;
 }

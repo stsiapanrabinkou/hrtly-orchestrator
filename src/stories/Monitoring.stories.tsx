@@ -34,3 +34,5 @@ export const Loading: Story = { args: { view: "loading" } };
 export const LoadError: Story = { args: { view: "error" } };
 export const EmptyCohort: Story = { args: { view: "empty" } };
 export const RefreshFailed: Story = { args: { view: "stale" } };
+
+export const NoCareGapInsights: Story = { args: { view: "all-msk-all-risk" } };

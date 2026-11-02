@@ -102,7 +102,7 @@ export function RecommendationView({
             </div>
             <Badge
               variant="outline"
-              className={`rounded-md px-3 py-1.5 ${decision === "pending" ? "bg-card" : "border-success/20 bg-success-soft text-success"}`}
+              className={`rounded-full px-3 py-1.5 ${decision === "pending" ? "bg-card" : "border-success/20 bg-success-soft text-success"}`}
             >
               {decision === "pending" ? <Clock3 /> : <CircleCheck />}
               {decision === "pending" ? "Pending review" : decisionLabel}
