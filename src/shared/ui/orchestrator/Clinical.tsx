@@ -2,24 +2,23 @@ import {
   AlertTriangle,
   CircleAlert,
   CircleCheck,
-  Activity,
   Inbox,
   SearchX,
   RefreshCw,
-  CircleDashed,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Card } from "@/components/ui/card";
 import { Heading, Text } from "@/shared/ui/typography";
-import type { Patient, Metric } from "@/flows/_mocks/orchestrator";
+import type { Patient } from "@/flows/_mocks/orchestrator";
+
+export const statusBadgeClassName = "rounded-full px-2 py-1 font-medium [&>svg]:size-3!";
 
 export function Flag({ flag, size = "sm" }: { flag: Patient["flag"]; size?: "sm" | "md" }) {
   return (
     <Badge
       variant="outline"
-      className={`rounded-full ${size === "md" && flag === "red" ? "border-danger/20" : size === "md" && flag === "yellow" ? "border-warning/20" : size === "md" ? "border-success/20" : "border-transparent"} font-medium ${size === "md" ? "h-8 gap-1.5 px-3 py-1 text-sm [&>svg]:size-3.5!" : "px-2 py-1"} ${flag === "red" ? "bg-danger-soft text-danger" : flag === "yellow" ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
+      className={`${statusBadgeClassName} font-medium ${size === "md" ? `h-8 gap-1.5 border px-3 py-1 text-sm [&>svg]:size-3.5! ${flag === "red" ? "border-danger/20" : flag === "yellow" ? "border-warning/20" : "border-success/20"}` : "px-2 py-1"} ${flag === "red" ? "bg-danger-soft text-danger" : flag === "yellow" ? "bg-warning-soft text-warning" : "bg-success-soft text-success"}`}
     >
       {flag === "none" ? (
         <CircleCheck className="size-3" />
@@ -29,9 +28,9 @@ export function Flag({ flag, size = "sm" }: { flag: Patient["flag"]; size?: "sm"
         <AlertTriangle className="size-3" />
       )}
       {flag === "red"
-        ? "Red flag"
+        ? "Critical"
         : flag === "yellow"
-          ? "Yellow flag"
+          ? "Warning"
           : "No alerts"}
     </Badge>
   );
@@ -43,7 +42,7 @@ export function TrackBadges({ tracks, size = "sm" }: { tracks: string[]; size?: 
         <Badge
           key={t}
           variant="outline"
-          className={`rounded-full border-border bg-muted/40 font-medium tracking-wide ${size === "md" ? "h-8 px-3 py-1 text-sm" : "px-1.5 py-0.5 text-[10px]"}`}
+          className={`rounded-full font-medium tracking-wide ${size === "md" ? "h-8 border border-border bg-muted/40 px-3 py-1 text-sm" : "bg-muted px-1.5 py-0.5 text-[10px]"}`}
         >
           {t}
         </Badge>
@@ -122,76 +121,4 @@ export function BlankState({
     </div>
   );
 }
-export function MetricCard({ metric }: { metric: Metric }) {
-  return (
-    <Card className="gap-0 rounded-xl p-5 shadow-none">
-      <div className="flex items-center justify-between">
-        <Heading level={4} as="h3">
-          {metric.label}
-        </Heading>
-        {metric.trend ? (
-          <Activity className="size-4 text-muted-foreground" />
-        ) : (
-          <CircleDashed className="size-4 text-muted-foreground" />
-        )}
-      </div>
-      <div className="mt-4 flex flex-wrap items-baseline gap-2">
-        <Text
-          as="span"
-          className={`${metric.value === "No data" || metric.value === "Not applicable" ? "text-xl" : "text-3xl"} font-semibold tracking-tight tabular-nums`}
-        >
-          {metric.value}
-        </Text>
-        <Text as="span" variant="muted">
-          {metric.unit}
-        </Text>
-      </div>
-      <Text variant="small" className="mt-1">
-        {metric.date}
-      </Text>
-      {metric.trend ? (
-        <figure className="mt-3">
-          <svg
-            className="h-20 w-full text-primary"
-            viewBox="0 0 288 82"
-            role="img"
-            aria-label={`${metric.label} historical trend: ${metric.history}`}
-          >
-            <path d="M24 72 H264" className="stroke-border" strokeWidth="1" />
-            <path
-              d="M24 42 H264"
-              className="stroke-border"
-              strokeWidth="1"
-              strokeDasharray="3 4"
-            />
-            <polyline
-              points={metric.trend}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          </svg>
-          <figcaption className="flex justify-between text-[10px] text-muted-foreground">
-            <span>Earlier readings</span>
-            <span>Latest</span>
-          </figcaption>
-          <details className="mt-2 text-xs text-muted-foreground">
-            <summary className="cursor-pointer rounded-sm focus-visible:outline-2 focus-visible:outline-ring">
-              View historical values
-            </summary>
-            <Text variant="small" className="mt-2 leading-relaxed">
-              {metric.history}
-            </Text>
-          </details>
-        </figure>
-      ) : (
-        <div className="my-5 h-14 rounded-md bg-muted/40" aria-hidden="true" />
-      )}
-      <Text variant="small" className="mt-3 border-t pt-3">
-        {metric.note}
-      </Text>
-    </Card>
-  );
-}
+export { MetricCard } from "./MeasurementCard";

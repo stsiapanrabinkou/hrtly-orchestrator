@@ -1,10 +1,13 @@
+import { PreviewLink } from "./FlowNavigation";
 import { useState, type ReactNode } from "react";
 import { Menu, Activity, UsersRound, ClipboardList, MessageSquare, ChartNoAxesCombined } from "lucide-react";
+import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetTrigger, SheetContent, SheetTitle, SheetDescription, SheetClose } from "@/components/ui/sheet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { HeaderControls } from "./HeaderControls";
 import { workspaceNavigation, type WorkspaceItem } from "@/flows/_mocks/navigation";
+import type { ClinicianProfile } from "@/flows/_mocks/clinician";
 
 type Props = {
   children: ReactNode;
@@ -15,17 +18,18 @@ type Props = {
     | "patients"
     | "recommendations"
     | "messages"
-    | "outcomes";
+    | "outcomes"
+    | "admin";
+  profile?: ClinicianProfile;
   appBase?: string;
   items?: WorkspaceItem[];
-  showFooter?: boolean;
 };
 export function Shell({
   children,
   section = "monitoring",
   appBase = "",
   items = workspaceNavigation,
-  showFooter = true,
+  profile,
 }: Props) {
   const [pointerInteraction, setPointerInteraction] = useState(false);
   const active =
@@ -37,6 +41,7 @@ export function Shell({
   return (
     <Tabs value={active} activationMode="manual" className="gap-0">
     <div className="min-h-svh bg-background text-foreground">
+      <Toaster />
       <a
         href="#main-content"
         className="fixed left-4 top-(--devbar-height) z-[80] -translate-y-full rounded-md bg-primary px-4 py-3 text-primary-foreground focus:translate-y-2"
@@ -45,10 +50,10 @@ export function Shell({
       </a>
       <header className="sticky top-(--devbar-height) z-20 border-b bg-card">
         <div className="mx-auto flex h-16 max-w-[1600px] items-center gap-2 px-4 sm:gap-6 sm:px-8">
-          <a href={`${appBase}/monitoring/all`} aria-label="HRTLY Orchestrator home" className="flex shrink-0 items-baseline gap-1 rounded-sm">
-            <span className="font-heading text-xl font-bold tracking-tight text-primary">HRTLY<span className="text-foreground">.</span></span>
+          <PreviewLink href={`${appBase}/monitoring/all`} aria-label="CARE Orchestrator home" className="flex shrink-0 items-baseline gap-1 rounded-sm">
+            <span className="font-heading text-xl font-bold tracking-tight text-primary">CARE<span className="text-foreground">.</span></span>
             <span className="hidden text-xs font-medium text-muted-foreground lg:inline">Orchestrator</span>
-          </a>
+          </PreviewLink>
           <nav aria-label="Main navigation" className="hidden h-full min-w-0 flex-1 lg:block">
             <TabsList
               variant="line"
@@ -59,30 +64,30 @@ export function Shell({
             >
               {items.map((item) => (
                 <TabsTrigger key={item.id} value={item.id} asChild className={`h-full text-muted-foreground after:bg-navigation-active after:rounded-t-[3px] after:rounded-b-none group-data-horizontal/tabs:after:-bottom-px group-data-horizontal/tabs:after:h-[3px] ${pointerInteraction ? "focus-visible:border-transparent focus-visible:ring-0 focus-visible:outline-none" : ""}`}>
-                  <a href={`${appBase}${item.href}`}><span className="inline-block translate-y-0.5">{item.label}</span></a>
+                  <PreviewLink href={`${appBase}${item.href}`}><span className="inline-block translate-y-0.5">{item.label}</span></PreviewLink>
                 </TabsTrigger>
               ))}
             </TabsList>
           </nav>
           <div className="flex flex-1 justify-end lg:hidden">
             <Sheet>
-              <SheetTrigger asChild><Button variant="ghost" size="icon" className="size-11" aria-label="Open navigation"><Menu className="size-5"/></Button></SheetTrigger>
+              <SheetTrigger asChild><Button variant="ghost" size="icon" aria-label="Open navigation"><Menu className="size-5"/></Button></SheetTrigger>
               <SheetContent side="left" className="w-80 max-w-[calc(100vw-2rem)] overflow-y-auto px-5 py-7 data-[side=left]:top-(--devbar-height) data-[side=left]:h-[calc(100svh-var(--devbar-height))]">
                 <SheetTitle>Orchestrator</SheetTitle>
                 <SheetDescription>Clinical workspace</SheetDescription>
                 <nav aria-label="Mobile navigation" className="mt-5 grid gap-2">
                   {items.map(item=>{
                     const Icon=item.id==='monitoring'?Activity:item.id==='patients'?UsersRound:item.id==='recommendations'?ClipboardList:item.id==='messages'?MessageSquare:ChartNoAxesCombined;
-                    return <SheetClose key={item.id} asChild><Button asChild variant="ghost" className={`min-h-12 justify-start gap-3 rounded-lg border-0 px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active===item.id?'bg-accent font-semibold text-primary hover:bg-accent':'text-muted-foreground hover:bg-muted hover:text-foreground'}`}><a href={`${appBase}${item.href}`} aria-current={active===item.id?'page':undefined}><Icon className="size-4"/>{item.label}</a></Button></SheetClose>
+                    return <SheetClose key={item.id} asChild><Button asChild variant="ghost" className={`justify-start gap-3 rounded-lg border-0 px-4 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${active===item.id?'bg-accent font-semibold text-primary hover:bg-accent':'text-muted-foreground hover:bg-muted hover:text-foreground'}`}><PreviewLink href={`${appBase}${item.href}`} aria-current={active===item.id?'page':undefined}><Icon className="size-4"/>{item.label}</PreviewLink></Button></SheetClose>
                   })}
                 </nav>
               </SheetContent>
             </Sheet>
           </div>
-          <HeaderControls />
+          <HeaderControls profile={profile} appBase={appBase} />
         </div>
       </header>
-      {items.map(item=>(
+      {(active === "admin" ? [{ id: "admin" }] : items).map(item=>(
         <TabsContent key={item.id} value={item.id} className="m-0">
           {active===item.id?(
       <main
@@ -95,10 +100,6 @@ export function Shell({
           ):null}
         </TabsContent>
       ))}
-      {showFooter ? <footer className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-2 px-4 pb-6 text-[11px] text-muted-foreground sm:px-8">
-        <span>Last updated Oct 19, 2026, 12:00 UTC</span>
-        <span>Orchestrator / Clinician workspace</span>
-      </footer> : null}
     </div>
     </Tabs>
   );

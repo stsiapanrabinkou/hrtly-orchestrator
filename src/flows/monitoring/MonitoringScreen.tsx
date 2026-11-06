@@ -1,5 +1,6 @@
+import { FlowNavigation } from "@/shared/ui/orchestrator/FlowNavigation";
 import { useEffect } from "react";
-import { useNavigate, useParams } from "@tanstack/react-router";
+import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { MonitoringView } from "@/shared/ui/orchestrator/MonitoringView";
 import { monitoringViews, cohortStats } from "../_mocks/orchestrator";
 import { combinedCareTrackStats } from "../_mocks/care-track-stats";
@@ -22,6 +23,7 @@ export default function MonitoringScreen({
 }: Props) {
   const { view = "all" } = useParams({ strict: false });
   const navigate = useNavigate();
+  const location = useLocation();
   // Restore the visible patient in the current responsive layout.
   useEffect(() => {
     const target = window.location.hash.slice(1);
@@ -35,7 +37,7 @@ export default function MonitoringScreen({
     anchor?.querySelector("a")?.focus({ preventScroll: true });
   }, [view]);
   return (
-    <MonitoringView
+    <FlowNavigation><MonitoringView
       key={view}
       view={view}
       views={views}
@@ -44,8 +46,8 @@ export default function MonitoringScreen({
       insights={insights}
       trackStats={trackStats}
       onViewChange={(next) => {
-        void navigate({ to: `/monitoring/${next}` });
+        void navigate({ to: `/monitoring/${next}`, state: location.state });
       }}
-    />
+    /></FlowNavigation>
   );
 }

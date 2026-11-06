@@ -1,12 +1,18 @@
-import { useState, type ReactNode } from "react";
+import { toast } from "sonner";
+import { Panel, Empty, Detail } from "./RecordPanels";
+import { PatientCommunicationsPanel } from "./PatientCommunicationsPanel";
+import { PatientEscalationsPanel } from "./PatientEscalationsPanel";
+import { PatientProfilePanels } from "./PatientProfilePanels";
+import { SearchField } from "./SearchField";
+import { CarePlanUpdatePreview } from "./CarePlanUpdatePreview";
+import { carePlanChanges } from "./care-plan-changes";
+import { useState } from "react";
 import {
   ArrowUpRight,
-  CheckCircle2,
   ClipboardList,
-  Mail,
+  MoreHorizontal,
   Pencil,
   Plus,
-  ShieldCheck,
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +21,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import { TabsContent } from "@/components/ui/tabs";
 import {
   Select,
@@ -32,8 +45,10 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Heading, Text } from "@/shared/ui/typography";
-import type { PatientRecord } from "@/flows/_mocks/patient-records";
+import type { CarePlanSnapshot, PatientRecord } from "@/flows/_mocks/patient-records";
 import type { Patient } from "@/flows/_mocks/orchestrator";
+import { mockCareTeamUsers, type CareTeamUser } from "@/flows/_mocks/clinician";
+import type { RecommendationDecisionPreview, RecommendationReturnTab } from "./recommendation-navigation";
 
 type Action =
   | "goal"
@@ -41,94 +56,65 @@ type Action =
   | "team"
   | "note"
   | "order"
+  | "cancel-order"
   | "visit"
+  | "delete-visit-outcome"
   | "hie"
   | "need"
+  | "clear-need"
   | "referral"
+  | "referral-details"
   | "message"
   | "remove";
 type Draft = {
   action: Action;
   id?: string;
+  userId?: string;
+  mode?: "edit";
   title: string;
   text: string;
   extra: string;
   category: string;
   contacts: string[];
-  collection?: "goals" | "activities" | "team";
+  collection?: "goals" | "activities" | "team" | "orders";
 };
 export type PatientActionPreview = {
   patientId: string;
   action: Action;
   values: Omit<Draft, "action">;
+  carePlan?: CarePlanSnapshot;
 };
 type Props = {
   patient: Patient;
   record: PatientRecord;
+  onCarePlanOpen: () => void;
+  recommendationDecisions?: RecommendationDecisionPreview[];
+  onRecommendationOpen?: (id: string, tab: RecommendationReturnTab) => void;
+  careUsers?: CareTeamUser[];
   actingUser: string;
   returnView: string;
   appBase: string;
   referralPreviewOutcome?: "success" | "failure";
+  messagePreviewOutcome?: "success" | "failure";
   onRecordPreview: (update: (current: PatientRecord) => PatientRecord) => void;
   onActionPreview?: (action: PatientActionPreview) => void;
 };
 
-function Panel({
-  title,
-  description,
-  action,
-  children,
-}: {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  children: ReactNode;
-}) {
-  return (
-    <section className="clinical-panel p-5 sm:p-6">
-      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <Heading level={3} as="h2">
-            {title}
-          </Heading>
-          {description && (
-            <Text variant="muted" className="mt-1 max-w-2xl">
-              {description}
-            </Text>
-          )}
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
-  );
-}
-function Empty({ children }: { children: ReactNode }) {
-  return (
-    <Text variant="muted" className="rounded-lg border border-dashed p-5">
-      {children}
-    </Text>
-  );
-}
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="mt-1 break-words text-sm font-medium">{value}</dd>
-    </div>
-  );
-}
 
 const actionNames: Record<Action, string> = {
   goal: "Care goal",
   activity: "Care activity",
   team: "Care team member",
   note: "Clinical note",
-  order: "Document an order",
-  visit: "Complete visit documentation",
+  order: "Record order",
+  "cancel-order": "Cancel order",
+  visit: "Record visit outcome",
+  "delete-visit-outcome": "Delete visit outcome",
   hie: "Send update to PCP",
   need: "Social need",
+  "clear-need": "Clear assessment",
   referral: "Create social referral",
+  "referral-details": "Social referral",
   message: "Reply to patient",
   remove: "Remove from care plan",
 };
@@ -136,24 +122,33 @@ const actionNames: Record<Action, string> = {
 export function PatientRecordPanels({
   patient,
   record,
+  onCarePlanOpen,
+  recommendationDecisions = [],
+  onRecommendationOpen,
+  careUsers = mockCareTeamUsers,
   actingUser,
   returnView,
   appBase,
   referralPreviewOutcome = "success",
+  messagePreviewOutcome = "success",
   onRecordPreview: setPreview,
   onActionPreview,
 }: Props) {
   const preview = record;
+  const changes = carePlanChanges(record.carePlanUpdate.lastSentPlan, record);
   const [draft, setDraft] = useState<Draft | null>(null);
-  const [notice, setNotice] = useState("");
+  const assignedGoals = draft?.collection === "team"
+    ? preview.goals.filter((goal) => goal.owner === draft.title) : [];
+  const assignedActivities = draft?.collection === "team"
+    ? preview.activities.filter((activity) => activity.owner === draft.title) : [];
   const [timelineType, setTimelineType] = useState("All events");
   const [timelineQuery, setTimelineQuery] = useState("");
-  const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [nextPreviewId, setNextPreviewId] = useState(1);
-  const [referralResult, setReferralResult] = useState<
-    "success" | "failure" | null
-  >(null);
+  const [referralResult, setReferralResult] = useState<"failure" | null>(null);
+  const referralDetails = preview.referrals.find((referral) => referral.id === draft?.id);
+  const hasContactDetails = [record.profile.phone, record.profile.email, record.profile.address]
+    .some((value) => value !== "Not recorded" && value.trim().length > 0);
   const open = (action: Action, values: Partial<Draft> = {}) => {
     setDraft({
       action,
@@ -177,13 +172,15 @@ export function PatientRecordPanels({
   const update = (values: Partial<Draft>) =>
     setDraft((current) => current && { ...current, ...values });
   const author = actingUser;
-  const stamp = "Session preview · not saved";
+  const stamp = "Just now";
+  const timelineSearchTerm = timelineQuery.trim().toLocaleLowerCase();
   const events = preview.timeline.filter(
     (event) =>
       (timelineType === "All events" || event.type === timelineType) &&
-      `${event.title} ${event.detail} ${event.source}`
-        .toLowerCase()
-        .includes(timelineQuery.toLowerCase()),
+      (timelineSearchTerm.length < 2 ||
+        `${event.title} ${event.detail} ${event.source}`
+          .toLocaleLowerCase()
+          .includes(timelineSearchTerm)),
   );
   const apply = () => {
     if (!draft) return;
@@ -191,6 +188,10 @@ export function PatientRecordPanels({
     const text = draft.text.trim();
     if (action === "referral" && !draft.contacts.length) {
       setError("Select at least one contact detail to share.");
+      return;
+    }
+    if (action === "need" && draft.title === "Other" && draft.category === "Yes" && !draft.extra.trim()) {
+      setError("Enter a category for this social need.");
       return;
     }
     if (
@@ -203,13 +204,30 @@ export function PatientRecordPanels({
     if (
       ["goal", "activity", "team"].includes(action) &&
       (!draft.title.trim() ||
-        (action !== "team" && !draft.extra.trim()) ||
         (action === "goal" && !text))
     ) {
       setError("Complete all required fields.");
       return;
     }
-    onActionPreview?.({ patientId: patient.id, action, values });
+    const selectedUser = careUsers.find((user) => user.id === draft.userId);
+    if (action === "team") {
+      if (!selectedUser) {
+        setError("Select a user from the directory.");
+        return;
+      }
+      if (preview.team.some((member) => member.userId === selectedUser.id && member.id !== draft.id)) {
+        setError("This user is already on the care team.");
+        return;
+      }
+    }
+    onActionPreview?.({
+      patientId: patient.id,
+      action,
+      values,
+      ...(action === "hie" ? { carePlan: {
+        goals: preview.goals, activities: preview.activities, team: preview.team,
+      } } : {}),
+    });
     if (
       action === "referral" &&
       referralPreviewOutcome === "failure" &&
@@ -225,7 +243,7 @@ export function PatientRecordPanels({
         id,
         title: draft.title.trim(),
         target: text,
-        owner: draft.extra.trim(),
+        owner: draft.extra.trim() || "Not assigned",
       };
       setPreview((current) => ({
         ...current,
@@ -238,7 +256,7 @@ export function PatientRecordPanels({
       const activity = {
         id,
         title: draft.title.trim(),
-        owner: draft.extra.trim(),
+        owner: draft.extra.trim() || "Not assigned",
       };
       setPreview((current) => ({
         ...current,
@@ -247,8 +265,8 @@ export function PatientRecordPanels({
           : [...current.activities, activity],
       }));
     }
-    if (action === "team") {
-      const member = { id, name: draft.title.trim(), role: draft.category };
+    if (action === "team" && selectedUser) {
+      const member = { id, userId: selectedUser.id, name: selectedUser.name, role: draft.category };
       setPreview((current) => ({
         ...current,
         team: draft.id
@@ -263,6 +281,12 @@ export function PatientRecordPanels({
         [collection]: current[collection].filter(
           (item) => item.id !== draft.id,
         ),
+        ...(collection === "team" ? {
+          goals: current.goals.map((goal) => goal.owner === draft.title
+            ? { ...goal, owner: draft.extra || "Not assigned" } : goal),
+          activities: current.activities.map((activity) => activity.owner === draft.title
+            ? { ...activity, owner: draft.extra || "Not assigned" } : activity),
+        } : {}),
       }));
     }
     if (action === "note")
@@ -273,33 +297,58 @@ export function PatientRecordPanels({
     if (action === "order")
       setPreview((current) => ({
         ...current,
-        orders: [
-          { id, type: draft.category, detail: text, date: stamp },
-          ...current.orders,
-        ],
+        orders: draft.id
+          ? current.orders.map((order) => order.id === draft.id
+            ? { ...order, type: draft.category, detail: text, updatedBy: author, updatedAt: stamp }
+            : order)
+          : [
+              { id, type: draft.category, detail: text, date: stamp, author, status: "Recorded" },
+              ...current.orders,
+            ],
+      }));
+    if (action === "cancel-order")
+      setPreview((current) => ({
+        ...current,
+        orders: current.orders.map((order) => order.id === draft.id
+          ? { ...order, status: "Cancelled", cancelledBy: author, cancelledAt: stamp }
+          : order),
       }));
     if (action === "visit")
       setPreview((current) => ({
         ...current,
-        timeline: [
-          {
-            id: `visit-preview-${id}`,
-            date: stamp,
-            sortDate: "preview",
-            type: "Visit",
-            title: `${draft.title} · completed in preview`,
-            detail: text,
-            source: author,
-          },
-          ...current.timeline.filter(
-            (event) => event.id !== id && event.id !== `visit-preview-${id}`,
-          ),
-        ],
+        timeline: current.timeline.map((event) =>
+          event.id === draft.id
+            ? {
+                ...event,
+                title: `${draft.title} · completed`,
+                detail: text,
+                source: author,
+              }
+            : event,
+        ),
         visits: current.visits.map((visit) =>
           visit.id === draft.id
-            ? { ...visit, status: "Completed · preview", summary: text }
+            ? {
+                ...visit, status: "Completed", summary: text,
+                outcomeAuthor: visit.outcomeAuthor ?? author,
+                outcomeRecordedAt: visit.outcomeRecordedAt ?? stamp,
+                ...(draft.mode === "edit" ? { outcomeUpdatedBy: author, outcomeUpdatedAt: stamp } : {}),
+              }
             : visit,
         ),
+      }));
+    if (action === "delete-visit-outcome")
+      setPreview((current) => ({
+        ...current,
+        visits: current.visits.map((visit) => visit.id === draft.id
+          ? {
+              ...visit, summary: "", outcomeAuthor: undefined, outcomeRecordedAt: undefined,
+              outcomeUpdatedBy: undefined, outcomeUpdatedAt: undefined,
+            }
+          : visit),
+        timeline: current.timeline.map((event) => event.id === draft.id
+          ? { ...event, detail: "Visit completed. Outcome summary not recorded.", source: author }
+          : event),
       }));
     if (action === "need")
       setPreview((current) => ({
@@ -310,11 +359,19 @@ export function PatientRecordPanels({
                 ...need,
                 status: draft.category,
                 notes: text,
+                otherCategory: draft.title === "Other" ? draft.extra.trim() : undefined,
                 captured: stamp,
                 author,
               }
             : need,
         ),
+      }));
+    if (action === "clear-need")
+      setPreview((current) => ({
+        ...current,
+        needs: current.needs.map((need) => need.category === draft.title
+          ? { ...need, status: "Not assessed", notes: "", otherCategory: undefined, captured: stamp, author }
+          : need),
       }));
     if (action === "referral") {
       setPreview((current) => ({
@@ -322,30 +379,53 @@ export function PatientRecordPanels({
         referrals: [
           ...current.referrals,
           {
-            id: `PREVIEW-${patient.displayId}-${current.referrals.length + 1}`,
+            id: `REF-${patient.displayId}-${current.referrals.length + 1}`,
             category: draft.category,
             reason: text,
-            status: "Submission preview · not sent",
+            status: "Submitted",
+            author,
+            date: stamp,
+            sharedContacts: draft.contacts.map((contact) => ({
+              label: contact === "phone" ? "Phone" : contact === "email" ? "Email" : "Address",
+              value: record.profile[contact as "phone" | "email" | "address"],
+            })),
           },
         ],
       }));
-      setReferralResult("success");
+      toast.success("Referral submitted.", {
+        description: `Reference ID: REF-${patient.displayId}-${preview.referrals.length + 1}`,
+      });
+      setDraft(null);
       return;
     }
-    if (action === "message") {
+    if (action === "hie") {
       setPreview((current) => ({
         ...current,
-        messages: [
-          ...current.messages,
-          { id, direction: "outgoing", text, date: stamp, author },
-        ],
+        carePlanUpdate: {
+          lastSentAt: stamp,
+          lastSentPlan: { goals: current.goals, activities: current.activities, team: current.team },
+        },
       }));
-      setMessage("");
     }
-    setNotice(
+    toast.success(
       action === "hie"
-        ? "PCP update preview prepared. No message was sent to an EHR."
-        : `${actionNames[action]} preview updated. Changes are not saved or sent.`,
+        ? "Update sent to PCP."
+        : {
+            goal: "Care goal saved.",
+            activity: "Care activity saved.",
+            team: "Care team updated.",
+            note: "Clinical note added.",
+            order: draft.id ? "Order updated." : "Order recorded.",
+            "cancel-order": "Order cancelled.",
+            visit: draft.mode === "edit" ? "Visit outcome updated." : "Visit outcome recorded.",
+            "delete-visit-outcome": "Visit outcome deleted.",
+            need: "Social need updated.",
+            "clear-need": "Assessment cleared.",
+            "referral-details": "",
+            message: "Message sent.",
+            remove: draft.collection === "team" ? "Care team member removed." : draft.collection === "orders" ? "Order deleted." : "Item removed from care plan.",
+            referral: "Referral submitted.",
+          }[action],
     );
     setDraft(null);
   };
@@ -368,7 +448,7 @@ export function PatientRecordPanels({
         variant="ghost"
         size="icon"
         aria-label={`Remove ${title}`}
-        onClick={() => open("remove", { id, title, collection })}
+        onClick={() => open("remove", { id, title, collection, extra: "Not assigned" })}
       >
         <Trash2 className="size-4" />
       </Button>
@@ -376,33 +456,18 @@ export function PatientRecordPanels({
   );
   return (
     <>
-      {notice && (
-        <div
-          role="status"
-          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-primary/20 bg-accent p-4"
-        >
-          <Text>{notice}</Text>
-          <Button variant="ghost" size="sm" onClick={() => setNotice("")}>
-            Dismiss
-          </Button>
-        </div>
-      )}
       <TabsContent value="timeline" className="space-y-5">
-        <Panel
-          title="Clinical timeline"
-          description="Recorded events, newest first. Clinical observations and coaching messages are read-only."
-        >
+        <Panel title="Clinical timeline">
           <div className="mb-6 flex flex-col gap-3 sm:flex-row">
             <div className="flex-1">
               <Label htmlFor="timeline-search" className="sr-only">
                 Search clinical timeline
               </Label>
-              <Input
+              <SearchField
                 id="timeline-search"
-                className="h-10"
                 placeholder="Search events, values or source…"
                 value={timelineQuery}
-                onChange={(event) => setTimelineQuery(event.target.value)}
+                onValueChange={setTimelineQuery}
               />
             </div>
             <Select value={timelineType} onValueChange={setTimelineType}>
@@ -449,9 +514,9 @@ export function PatientRecordPanels({
               {events.map((event) => (
                 <li
                   key={event.id}
-                  className="relative grid gap-3 border-l-2 border-border pb-7 pl-6 last:pb-0 sm:grid-cols-[170px_1fr]"
+                  className="relative grid gap-3 pb-7 pl-6 before:absolute before:-bottom-[9px] before:left-0 before:top-[9px] before:w-0.5 before:bg-border last:pb-0 last:before:hidden sm:grid-cols-[170px_1fr] sm:items-baseline"
                 >
-                  <div className="absolute -left-1.5 top-1 size-2.5 rounded-full border-2 border-background bg-primary" />
+                  <div className="absolute -left-1 top-1 z-10 size-2.5 rounded-full border-2 border-background bg-primary" />
                   <div>
                     <Text variant="small">{event.date}</Text>
                     <Badge variant="outline" className="mt-2">
@@ -476,56 +541,20 @@ export function PatientRecordPanels({
         </Panel>
       </TabsContent>
       <TabsContent value="escalations">
-        <Panel
-          title="Escalation log"
-          description="Existing open alerts, recommended actions and clinician notes. Alerts cannot be created, resolved or changed from this view."
-        >
-          {!record.escalations.length ? (
-            <Empty>
-              No open clinical alerts recorded. Monitoring gaps are shown
-              separately in Overview.
-            </Empty>
-          ) : (
-            <div className="space-y-4">
-              {record.escalations.map((alert) => (
-                <article key={alert.id} className="rounded-lg border p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <Heading level={4} as="h3">
-                      {alert.title}
-                    </Heading>
-                    <Badge variant="outline">Open · read-only</Badge>
-                  </div>
-                  <Text variant="small" className="mt-2">
-                    {alert.date} · {alert.id}
-                  </Text>
-                  <Text className="mt-4 font-medium">Recommended action</Text>
-                  <Text className="mt-1">{alert.action}</Text>
-                  <div className="mt-4 rounded-lg bg-muted/40 p-4">
-                    <Text className="font-medium">Clinician note</Text>
-                    <Text className="mt-1">{alert.note}</Text>
-                    <Text variant="small" className="mt-2">
-                      {alert.author}
-                    </Text>
-                  </div>
-                  <Text
-                    variant="small"
-                    className="mt-4 inline-flex items-center gap-2"
-                  >
-                    <ShieldCheck className="size-4 shrink-0" />
-                    {alert.delivery}
-                  </Text>
-                </article>
-              ))}
-            </div>
-          )}
-        </Panel>
+        <PatientEscalationsPanel escalations={preview.escalations} />
       </TabsContent>
       <TabsContent value="care" className="space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3 rounded-lg border bg-card p-4">
           <div>
-            <Text className="font-medium">Care plan · {patient.name}</Text>
+            <Text className="font-medium">
+              {record.profile.pcp === "Not recorded"
+                ? "PCP not recorded"
+                : `PCP: ${record.profile.pcp}`}
+            </Text>
             <Text variant="small" className="mt-1">
-              Goals, interventions and the people responsible for care.
+              {preview.carePlanUpdate.lastSentAt
+                ? `${changes.length} ${changes.length === 1 ? "change" : "changes"} since last send · Last sent: ${preview.carePlanUpdate.lastSentAt}`
+                : "Not sent yet"}
             </Text>
           </div>
           <Button
@@ -537,14 +566,15 @@ export function PatientRecordPanels({
             Send update to PCP
           </Button>
         </div>
-        <div className="grid items-start gap-5 xl:grid-cols-2">
-          <Panel
+        <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <div className="contents min-w-0 gap-5 xl:flex xl:flex-col">
+            <div className="order-1 min-w-0">
+              <Panel
             title="Care goals"
             action={
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => open("goal", { extra: author })}
+                onClick={() => open("goal", { extra: "Not assigned" })}
               >
                 <Plus className="size-4" />
                 Add goal
@@ -584,13 +614,14 @@ export function PatientRecordPanels({
               </div>
             )}
           </Panel>
-          <Panel
+            </div>
+            <div className="order-2 min-w-0">
+              <Panel
             title="Activities & interventions"
             action={
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => open("activity", { extra: author })}
+                onClick={() => open("activity", { extra: "Not assigned" })}
               >
                 <Plus className="size-4" />
                 Add activity
@@ -630,49 +661,12 @@ export function PatientRecordPanels({
               </div>
             )}
           </Panel>
-        </div>
-        <Panel
-          title="Care team"
-          action={
-            <Button variant="outline" size="sm" onClick={() => open("team")}>
-              <Plus className="size-4" />
-              Add member
-            </Button>
-          }
-        >
-          {!preview.team.length ? (
-            <Empty>No care team assigned.</Empty>
-          ) : (
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {preview.team.map((member) => (
-                <div
-                  key={member.id}
-                  className="flex items-start justify-between gap-2 rounded-lg border p-4"
-                >
-                  <div>
-                    <Text className="font-medium">{member.name}</Text>
-                    <Text variant="small" className="mt-1">
-                      {member.role}
-                    </Text>
-                  </div>
-                  {editControls("team", member.id, member.name, () =>
-                    open("team", {
-                      id: member.id,
-                      title: member.name,
-                      category: member.role,
-                    }),
-                  )}
-                </div>
-              ))}
             </div>
-          )}
-        </Panel>
-        <div className="grid items-start gap-5 xl:grid-cols-2">
-          <Panel
+            <div className="order-4 min-w-0">
+              <Panel
             title="Clinical notes & decisions"
-            description="Free-text notes are read-only after saving."
             action={
-              <Button variant="outline" size="sm" onClick={() => open("note")}>
+              <Button variant="outline" onClick={() => open("note")}>
                 <Plus className="size-4" />
                 Add note
               </Button>
@@ -695,38 +689,10 @@ export function PatientRecordPanels({
               </div>
             )}
           </Panel>
-          <Panel
-            title="Lab & device orders"
-            description="Documented orders only. External fulfillment and tracking are outside this workflow."
-            action={
-              <Button variant="outline" size="sm" onClick={() => open("order")}>
-                <Plus className="size-4" />
-                Document order
-              </Button>
-            }
-          >
-            {!preview.orders.length ? (
-              <Empty>No orders documented.</Empty>
-            ) : (
-              <div className="space-y-4">
-                {preview.orders.map((order) => (
-                  <article key={order.id} className="rounded-lg border p-4">
-                    <Badge variant="outline">{order.type}</Badge>
-                    <Text className="mt-2 whitespace-pre-wrap break-words">
-                      {order.detail}
-                    </Text>
-                    <Text variant="small" className="mt-2">
-                      {order.date} · linked to this patient and care plan
-                    </Text>
-                  </article>
-                ))}
-              </div>
-            )}
-          </Panel>
-        </div>
-        <Panel
-          title="Visit documentation"
-          description="Document outcomes of existing visits. Reminders use the recorded visit time and configured channel."
+            </div>
+            <div className="order-6 min-w-0">
+              <Panel
+          title="Visits"
         >
           {!preview.visits.length ? (
             <Empty>No visits recorded.</Empty>
@@ -743,17 +709,40 @@ export function PatientRecordPanels({
                         {visit.date}
                       </Text>
                     </div>
-                    <Badge variant="outline">{visit.status}</Badge>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline">{visit.status}</Badge>
+                      {visit.summary && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" aria-label={`Outcome actions for ${visit.type}`}>
+                              <MoreHorizontal className="size-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onSelect={() => open("visit", { id: visit.id, title: visit.type, text: visit.summary, mode: "edit" })}>
+                              Edit outcome
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem variant="destructive" onSelect={() => open("delete-visit-outcome", { id: visit.id, title: visit.type })}>
+                              Delete outcome
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                    </div>
                   </div>
                   {visit.summary && (
                     <Text className="mt-3 whitespace-pre-wrap break-words">
                       {visit.summary}
                     </Text>
                   )}
+                  {visit.outcomeAuthor && <Text variant="small" className="mt-2">{visit.outcomeAuthor} · {visit.outcomeRecordedAt}</Text>}
+                  {visit.outcomeUpdatedAt && <Text variant="small" className="mt-1">Updated: {visit.outcomeUpdatedBy} · {visit.outcomeUpdatedAt}</Text>}
+                  {!visit.summary && <Text variant="muted" className="mt-3">Outcome not recorded.</Text>}
                   <Text variant="small" className="mt-3">
                     {visit.reminder}
                   </Text>
-                  {visit.status === "Awaiting documentation" && (
+                  {!visit.summary && (
                     <Button
                       className="mt-4"
                       variant="outline"
@@ -770,255 +759,139 @@ export function PatientRecordPanels({
             </div>
           )}
         </Panel>
-      </TabsContent>
-      <TabsContent value="profile" className="space-y-5">
-        <div className="grid items-start gap-5 xl:grid-cols-[1.2fr_1fr]">
-          <Panel
-            title="Demographics & access"
-            description="Patient information · read-only"
-          >
-            <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2">
-              <Detail label="Full name" value={patient.name} />
-              <Detail label="Date of birth" value={patient.dob} />
-              <Detail label="Medicare ID" value={record.profile.medicareId} />
-              <Detail label="Internal patient ID" value={patient.displayId} />
-              <Detail label="Phone" value={record.profile.phone} />
-              <Detail label="Email" value={record.profile.email} />
-              <Detail label="Address" value={record.profile.address} />
-              <Detail
-                label="Preferred language"
-                value={record.profile.language}
-              />
-              <Detail
-                label="Preferred modality"
-                value={record.profile.modality}
-              />
-              <Detail
-                label="Digital literacy"
-                value={record.profile.digitalLiteracy}
-              />
-              <Detail
-                label="Transportation barrier"
-                value={record.profile.transportation}
-              />
-              <Detail
-                label="Primary care provider"
-                value={record.profile.pcp}
-              />
-            </dl>
-          </Panel>
-          <Panel
-            title="Caregivers & family"
-            description="Linked people and their granted access · informational only"
-          >
-            {!record.caregivers.length ? (
-              <Empty>No linked caregivers or family members recorded.</Empty>
-            ) : (
-              record.caregivers.map((person) => (
-                <article key={person.name} className="rounded-lg border p-4">
-                  <Text className="font-medium">{person.name}</Text>
-                  <Text variant="small" className="mt-1">
-                    {person.relationship}
-                  </Text>
-                  <Text className="mt-3">{person.permissions}</Text>
-                </article>
-              ))
-            )}
-          </Panel>
-        </div>
-        <Panel
-          title="Enrollment history"
-          description={`Assigned hub: ${record.profile.hub}`}
-        >
-          <div className="grid gap-4 md:grid-cols-2">
-            {record.enrollments.map((enrollment) => (
-              <article key={enrollment.track} className="rounded-lg border p-4">
-                <div className="mb-4 flex items-center justify-between gap-2">
-                  <Heading level={4} as="h3">
-                    {enrollment.track}
-                  </Heading>
-                  <Badge variant="outline">{enrollment.status}</Badge>
-                </div>
-                <dl className="grid gap-4">
-                  <Detail label="Track start date" value={enrollment.start} />
-                  <Detail
-                    label="Baseline at enrollment"
-                    value={enrollment.baseline}
-                  />
-                  <Detail
-                    label="Assigned care team"
-                    value={
-                      preview.team
-                        .map((member) => `${member.name} (${member.role})`)
-                        .join(" · ") || "Not assigned"
-                    }
-                  />
-                </dl>
-              </article>
-            ))}
+            </div>
           </div>
-        </Panel>
-        <Panel
-          title="Social needs"
-          description="Record assessed needs and supporting context. Demographic access flags above remain read-only."
+          <aside aria-label="Care team and orders" className="contents min-w-0 gap-5 xl:flex xl:flex-col">
+            <div className="order-3 min-w-0">
+              <Panel
+          title="Care team"
           action={
-            <Button onClick={() => open("referral")}>
-              Create social referral
-              <ArrowUpRight className="size-4" />
+            <Button variant="outline" onClick={() => open("team")}>
+              <Plus className="size-4" />
+              Add member
             </Button>
           }
         >
-          <div className="grid gap-4 sm:grid-cols-2">
-            {preview.needs.map((need) => (
-              <article key={need.category} className="rounded-lg border p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <Heading level={4} as="h3">
-                    {need.category}
-                  </Heading>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`Edit ${need.category.toLowerCase()} need`}
-                    onClick={() =>
-                      open("need", {
-                        title: need.category,
-                        category: need.status,
-                        text: need.notes,
-                      })
-                    }
-                  >
-                    <Pencil className="size-4" />
-                    Edit
-                  </Button>
-                </div>
-                <Badge variant="outline" className="mt-2">
-                  {need.status === "Yes"
-                    ? "Need identified"
-                    : need.status === "No"
-                      ? "No need reported"
-                      : need.status}
-                </Badge>
-                {need.notes && (
-                  <Text className="mt-3 whitespace-pre-wrap break-words">
-                    {need.notes}
-                  </Text>
-                )}
-                <Text variant="small" className="mt-3">
-                  Captured: {need.captured} · {need.author}
-                </Text>
-              </article>
-            ))}
-          </div>
-          <div className="mt-6 border-t pt-5">
-            <Heading level={4} as="h3" className="mb-3">
-              Social referrals
-            </Heading>
-            {!preview.referrals.length ? (
-              <Empty>No social referrals recorded.</Empty>
-            ) : (
-              preview.referrals.map((referral) => (
-                <div key={referral.id} className="mb-3 rounded-lg border p-4">
-                  <Text className="font-medium">
-                    {referral.category} · {referral.status}
-                  </Text>
-                  <Text className="mt-1 break-words">{referral.reason}</Text>
-                  <Text variant="small" className="mt-2">
-                    Reference ID: {referral.id}
-                  </Text>
-                </div>
-              ))
-            )}
-          </div>
-        </Panel>
-      </TabsContent>
-      <TabsContent value="communications" className="space-y-5">
-        <Panel
-          title="Recommendations"
-          description="Review triggering signals before approving, modifying or dismissing a recommendation."
-        >
-          {!record.recommendations.length ? (
-            <Empty>No pending recommendations for this patient.</Empty>
+          {!preview.team.length ? (
+            <Empty>No care team assigned.</Empty>
           ) : (
-            <div className="space-y-4">
-              {record.recommendations.map((recommendation) => (
-                <article
-                  key={recommendation.id}
-                  className="flex flex-wrap items-start justify-between gap-4 rounded-lg border p-4"
+            <div className="divide-y">
+              {preview.team.map((member) => (
+                <div
+                  key={member.id}
+                  className="flex items-start justify-between gap-3 py-4 first:pt-0 last:pb-0"
                 >
-                  <div className="min-w-0 flex-1">
-                    <Heading level={4} as="h3">
-                      {recommendation.title}
-                    </Heading>
-                    <Text className="mt-2">{recommendation.explanation}</Text>
-                    <Text variant="small" className="mt-2">
-                      {recommendation.signalDate}
+                  <div className="min-w-0">
+                    <Text className="font-medium break-words">{member.name}</Text>
+                    <Text variant="small" className="mt-1">
+                      {member.role}
                     </Text>
                   </div>
-                  <Button asChild variant="outline">
-                    <a
-                      href={`${appBase}/patients/${patient.id}/from/${returnView}/recommendations/${recommendation.id}`}
-                    >
-                      Review recommendation
-                      <ArrowUpRight className="size-4" />
-                    </a>
-                  </Button>
-                </article>
+                  {editControls("team", member.id, member.name, () =>
+                    open("team", {
+                      id: member.id,
+                      userId: member.userId,
+                      title: member.name,
+                      category: member.role,
+                    }),
+                  )}
+                </div>
               ))}
             </div>
           )}
         </Panel>
-        <Panel
-          title="Patient messages"
-          description={`Secure communication log · ${patient.name}`}
-        >
-          {!preview.messages.length ? (
-            <Empty>
-              No messages recorded. You can start a conversation with this
-              patient.
-            </Empty>
-          ) : (
-            <ol className="space-y-4">
-              {preview.messages.map((item) => (
-                <li
-                  key={item.id}
-                  className={`max-w-2xl rounded-xl border p-4 ${item.direction === "outgoing" ? "ml-auto bg-accent/50" : "bg-muted/30"}`}
-                >
-                  <div className="flex flex-wrap justify-between gap-2">
-                    <Text className="font-medium">{item.author}</Text>
-                    <Text variant="small">
-                      {item.direction === "incoming" ? "Received" : "Outgoing"}{" "}
-                      · {item.date}
-                    </Text>
-                  </div>
-                  <Text className="mt-3 whitespace-pre-wrap break-words">
-                    {item.text}
-                  </Text>
-                </li>
-              ))}
-            </ol>
-          )}
-          <div className="mt-6 space-y-3 border-t pt-5">
-            <Label htmlFor="patient-reply">Message to {patient.name}</Label>
-            <Textarea
-              id="patient-reply"
-              value={message}
-              maxLength={4000}
-              onChange={(event) => setMessage(event.target.value)}
-              placeholder="Write a message…"
-              className="min-h-28"
-            />
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <Text variant="small">Text only · {message.length}/4,000</Text>
-              <Button
-                disabled={!message.trim()}
-                onClick={() => open("message", { text: message })}
-              >
-                <Mail className="size-4" />
-                Preview message
+            </div>
+            <div className="order-5 min-w-0">
+              <Panel
+            title="Lab & device orders"
+            action={
+              <Button variant="outline" onClick={() => open("order")}>
+                <Plus className="size-4" />
+                Record order
               </Button>
+            }
+          >
+            {!preview.orders.length ? (
+              <Empty>No orders documented.</Empty>
+            ) : (
+              <div className="divide-y">
+                {preview.orders.map((order) => (
+                  <article key={order.id} className="py-4 first:pt-0 last:pb-0">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{order.type}</Badge>
+                        {order.status === "Cancelled" && <Badge variant="secondary">Cancelled</Badge>}
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label={`Actions for ${order.detail}`}>
+                            <MoreHorizontal className="size-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onSelect={() => open("order", { id: order.id, category: order.type, text: order.detail })}>
+                            Edit order
+                          </DropdownMenuItem>
+                          <DropdownMenuItem disabled={order.status === "Cancelled"} onSelect={() => open("cancel-order", { id: order.id, title: order.detail })}>
+                            Cancel order
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem variant="destructive" onSelect={() => open("remove", { id: order.id, title: order.detail, collection: "orders" })}>
+                            Delete order
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <Text className="mt-2 whitespace-pre-wrap break-words">
+                      {order.detail}
+                    </Text>
+                    <Text variant="small" className="mt-2">
+                      {order.author} · {order.date}
+                    </Text>
+                    {order.updatedAt && <Text variant="small" className="mt-1">Updated: {order.updatedBy} · {order.updatedAt}</Text>}
+                    {order.cancelledAt && <Text variant="small" className="mt-1">Cancelled: {order.cancelledBy} · {order.cancelledAt}</Text>}
+                  </article>
+                ))}
+              </div>
+            )}
+          </Panel>
             </div>
-          </div>
-        </Panel>
+          </aside>
+        </div>
+      </TabsContent>
+      <TabsContent value="profile">
+        <PatientProfilePanels
+          patient={patient}
+          record={preview}
+          onCarePlanOpen={onCarePlanOpen}
+          onNeedEdit={(need) => open("need", { title: need.category, category: need.status, text: need.notes, extra: need.otherCategory ?? "" })}
+          onNeedClear={(need) => open("clear-need", { title: need.category })}
+          onReferralCreate={(need) => open("referral", need ? { category: need.category, text: need.notes } : {})}
+          onReferralView={(referral) => open("referral-details", { id: referral.id })}
+        />
+      </TabsContent>
+      <TabsContent value="communications">
+        <PatientCommunicationsPanel
+          patient={patient}
+          messages={preview.messages}
+          recommendations={preview.recommendations}
+          appBase={appBase}
+          returnView={returnView}
+          decisions={recommendationDecisions}
+          onRecommendationOpen={onRecommendationOpen}
+          onMessageSend={(text) => {
+            onActionPreview?.({ patientId: patient.id, action: "message", values: { title: "", text, extra: "", category: "", contacts: [] } });
+            if (messagePreviewOutcome === "failure") return false;
+            const id = `preview-message-${nextPreviewId}`;
+            setNextPreviewId((current) => current + 1);
+            setPreview((current) => ({
+              ...current,
+              messages: [...current.messages, { id, direction: "outgoing", text, date: stamp, timestamp: Date.now(), author }],
+            }));
+            toast.success("Message sent.");
+            return true;
+          }}
+        />
       </TabsContent>
       <Dialog
         open={draft !== null}
@@ -1026,51 +899,115 @@ export function PatientRecordPanels({
           if (!value) setDraft(null);
         }}
       >
-        <DialogContent className="max-h-[85dvh] overflow-y-auto sm:max-w-xl">
+        <DialogContent className="flex max-h-[85dvh] flex-col gap-6 overflow-hidden sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
-              {draft ? actionNames[draft.action] : "Patient action"}
+              {draft?.action === "remove" && draft.collection === "team"
+                ? "Remove care team member"
+                : draft?.action === "remove" && draft.collection === "orders"
+                  ? "Delete order"
+                : draft?.action === "order" && draft.id
+                  ? "Edit order"
+                : draft?.action === "visit" && draft.mode === "edit"
+                  ? "Edit visit outcome"
+                : draft ? actionNames[draft.action] : "Patient action"}
             </DialogTitle>
             <DialogDescription>
-              {patient.name} · {patient.displayId} · Preview only. Changes are
-              not saved and nothing is sent.
+              {patient.name} · {patient.displayId}
             </DialogDescription>
           </DialogHeader>
           {draft && (
             <form
-              className="space-y-5"
+              className="flex min-h-0 flex-col gap-6"
               onSubmit={(event) => {
                 event.preventDefault();
                 apply();
               }}
             >
-              {referralResult === "success" ? (
-                <div
-                  role="status"
-                  className="space-y-3 rounded-lg border border-success/20 bg-success-soft p-4"
-                >
-                  <CheckCircle2 className="size-6 text-success" />
-                  <Heading level={4} as="h3">
-                    Referral submission preview
-                  </Heading>
-                  <Text>
-                    Success state shown. No referral was submitted to Unite Us.
-                  </Text>
-                  <Text variant="small">
-                    Example reference ID: {preview.referrals.at(-1)?.id}
-                  </Text>
-                </div>
-              ) : (
+              <div className="-mx-1 grid min-h-0 gap-6 overflow-y-auto p-1">
                 <>
                   {draft.action === "remove" ? (
                     <Text>
-                      Remove “{draft.title}” from this care plan preview?
+                      {draft.collection === "orders"
+                        ? `Delete the order record “${draft.title}”?`
+                        : `Remove “${draft.title}” from ${draft.collection === "team" ? "this care team" : "this care plan"}?`}
                     </Text>
                   ) : null}
-                  {["goal", "activity", "team"].includes(draft.action) && (
+                  {draft.action === "cancel-order" && <Text>Mark “{draft.title}” as cancelled? The order record will remain in the care plan.</Text>}
+                  {draft.action === "delete-visit-outcome" && <Text>Delete the outcome summary for “{draft.title}”? The visit and its completion status will remain.</Text>}
+                  {draft.action === "clear-need" && <Text>Clear the {draft.title.toLowerCase()} assessment and its notes? The need will be marked Not assessed.</Text>}
+                  {draft.action === "referral-details" && referralDetails && (
+                    <div className="space-y-5">
+                      <dl className="grid gap-5 sm:grid-cols-2">
+                        <Detail label="Category" value={referralDetails.category} />
+                        <Detail label="Submission" value={referralDetails.status} />
+                        <Detail label="Reference ID" value={referralDetails.id} />
+                        <Detail label="Submitted by" value={`${referralDetails.author} · ${referralDetails.date}`} />
+                      </dl>
+                      <div><Text variant="small">Reason</Text><Text className="mt-2 whitespace-pre-wrap break-words">{referralDetails.reason}</Text></div>
+                      <div className="border-t pt-4"><Heading level={4} as="h3">Contact details shared</Heading><dl className="mt-4 grid gap-4">{referralDetails.sharedContacts.map((contact) => <Detail key={contact.label} label={contact.label} value={contact.value} />)}</dl></div>
+                    </div>
+                  )}
+                  {draft.action === "remove" && draft.collection === "team" &&
+                    (assignedGoals.length > 0 || assignedActivities.length > 0) && (
+                      <div className="space-y-4">
+                        <div className="rounded-lg border border-warning/20 bg-warning-soft p-4">
+                          <Text className="font-medium">This member has assigned responsibilities</Text>
+                          <ul className="mt-3 space-y-2 text-sm">
+                            {assignedGoals.map((goal) => <li key={goal.id}>Goal: {goal.title}</li>)}
+                            {assignedActivities.map((activity) => <li key={activity.id}>Activity: {activity.title}</li>)}
+                          </ul>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="reassign-owner">Reassign responsibilities to</Label>
+                          <Select value={draft.extra} onValueChange={(extra) => update({ extra })}>
+                            <SelectTrigger id="reassign-owner" className="w-full"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="Not assigned">Not assigned</SelectItem>
+                              {preview.team.filter((member) => member.id !== draft.id).map((member) => (
+                                <SelectItem key={member.id} value={member.name}>{member.name} · {member.role}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Text variant="small">Choosing Not assigned keeps the goals and activities without an individual responsible.</Text>
+                        </div>
+                      </div>
+                    )}
+                  {draft.action === "team" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="care-team-user">User *</Label>
+                      {draft.id ? (
+                        <Input id="care-team-user" readOnly value={draft.title} className="bg-muted/30" />
+                      ) : (
+                        <Select
+                          value={draft.userId}
+                          required
+                          onValueChange={(userId) => {
+                            const user = careUsers.find((item) => item.id === userId);
+                            if (user) update({ userId, title: user.name, category: user.defaultCareRole });
+                          }}
+                        >
+                          <SelectTrigger id="care-team-user" className="w-full">
+                            <SelectValue placeholder="Select user" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {careUsers.map((user) => {
+                              const onTeam = preview.team.some((member) => member.userId === user.id);
+                              return (
+                                <SelectItem key={user.id} value={user.id} disabled={onTeam}>
+                                  {user.name} · {onTeam ? "Already on team" : user.email}
+                                </SelectItem>
+                              );
+                            })}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </div>
+                  )}
+                  {["goal", "activity"].includes(draft.action) && (
                     <div className="space-y-2">
                       <Label htmlFor="action-title">
-                        {draft.action === "team" ? "Full name" : "Title"} *
+                        {draft.action === "goal" ? "Goal" : "Activity or intervention"} *
                       </Label>
                       <Input
                         id="action-title"
@@ -1089,10 +1026,10 @@ export function PatientRecordPanels({
                     <div className="space-y-2">
                       <Label htmlFor="action-category">
                         {draft.action === "team"
-                          ? "Role"
+                          ? "Care team role"
                           : draft.action === "need"
-                            ? `${draft.title} need`
-                            : "Category"}{" "}
+                            ? "Need identified"
+                            : draft.action === "order" ? "Order type" : "Category"}{" "}
                         *
                       </Label>
                       <Select
@@ -1125,30 +1062,62 @@ export function PatientRecordPanels({
                       </Select>
                     </div>
                   )}
-                  {["goal", "activity"].includes(draft.action) && (
+                  {draft.action === "need" && draft.title === "Other" && (
                     <div className="space-y-2">
-                      <Label htmlFor="action-owner">
-                        Responsible team member *
-                      </Label>
+                      <Label htmlFor="social-need-category">Category{draft.category === "Yes" ? " *" : " (optional)"}</Label>
+                      <Input id="social-need-category" maxLength={180} required={draft.category === "Yes"} value={draft.extra} onChange={(event) => update({ extra: event.target.value })} />
+                    </div>
+                  )}
+                  {draft.action === "goal" && (
+                    <div className="space-y-2">
+                      <Label htmlFor="goal-target">Target *</Label>
                       <Input
-                        id="action-owner"
+                        id="goal-target"
                         required
-                        maxLength={180}
-                        value={draft.extra}
-                        onChange={(event) =>
-                          update({ extra: event.target.value })
-                        }
+                        maxLength={4000}
+                        value={draft.text}
+                        onChange={(event) => update({ text: event.target.value })}
                       />
                     </div>
                   )}
-                  {!["team", "activity", "hie", "remove"].includes(
+                  {["goal", "activity"].includes(draft.action) && (
+                    <div className="space-y-2">
+                      <Label htmlFor="action-owner">
+                        Responsible team member (optional)
+                      </Label>
+                      <Select
+                        value={draft.extra || undefined}
+                        onValueChange={(extra) => update({ extra })}
+                      >
+                        <SelectTrigger id="action-owner" className="w-full">
+                          <SelectValue placeholder="Select a care team member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Not assigned">Not assigned</SelectItem>
+                          {draft.extra && draft.extra !== "Not assigned" &&
+                            !preview.team.some((member) => member.name === draft.extra) && (
+                              <SelectItem value={draft.extra} disabled>
+                                {draft.extra} · No longer on care team
+                              </SelectItem>
+                            )}
+                          {preview.team.map((member) => (
+                            <SelectItem key={member.id} value={member.name}>
+                              {member.name} · {member.role}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {!preview.team.length && (
+                        <Text variant="small">Add members in the Care team block to assign responsibility.</Text>
+                      )}
+                    </div>
+                  )}
+                  {!["goal", "team", "activity", "hie", "remove", "cancel-order", "delete-visit-outcome", "clear-need", "referral-details"].includes(
                     draft.action,
                   ) && (
                     <div className="space-y-2">
                       <Label htmlFor="action-details">
-                        {draft.action === "goal"
-                          ? "Target value and goal description"
-                          : draft.action === "need"
+                        {draft.action === "need"
                             ? "Supporting notes (optional)"
                             : draft.action === "referral"
                               ? "Referral reason"
@@ -1175,8 +1144,8 @@ export function PatientRecordPanels({
                   )}
                   {draft.action === "note" && (
                     <Text variant="small">
-                      Notes are associated with this patient and care plan and
-                      become read-only after saving.
+                      Include assessment findings, care decisions, and follow-up
+                      instructions.
                     </Text>
                   )}
                   {draft.action === "hie" && (
@@ -1184,33 +1153,11 @@ export function PatientRecordPanels({
                       <dl>
                         <Detail label="Recipient" value={record.profile.pcp} />
                       </dl>
-                      <Text>
-                        The update includes this patient’s current care goals,
-                        activities and responsible care team. Outbound
-                        communication only.
-                      </Text>
-                      <div className="rounded-lg border p-4">
-                        <Text className="font-medium">Update summary</Text>
-                        {preview.goals.map((goal) => (
-                          <Text key={goal.id} className="mt-2">
-                            {goal.title}: {goal.target}
-                          </Text>
-                        ))}
-                        {preview.activities.map((activity) => (
-                          <Text key={activity.id} className="mt-2">
-                            {activity.title} · {activity.owner}
-                          </Text>
-                        ))}
-                        {preview.team.map((member) => (
-                          <Text key={member.id} className="mt-2">
-                            {member.name} · {member.role}
-                          </Text>
-                        ))}
-                        <Text variant="small" className="mt-3">
-                          {preview.activities.length} activities ·{" "}
-                          {preview.team.length} care team members
-                        </Text>
-                      </div>
+                      <CarePlanUpdatePreview
+                        plan={preview}
+                        changes={changes}
+                        lastSentAt={preview.carePlanUpdate.lastSentAt}
+                      />
                     </div>
                   )}
                   {draft.action === "referral" && (
@@ -1245,7 +1192,7 @@ export function PatientRecordPanels({
                                 htmlFor={`share-${contact}`}
                                 className="block min-w-0 break-words leading-5"
                               >
-                                {contact}: {record.profile[contact]}
+                                {contact === "phone" ? "Phone" : contact === "email" ? "Email" : "Address"}: {record.profile[contact]}
                               </Label>
                             </div>
                           ),
@@ -1272,8 +1219,8 @@ export function PatientRecordPanels({
                         Referral could not be submitted
                       </Text>
                       <Text className="mt-1">
-                        Your entered details are retained. Retry the submission
-                        preview or cancel to return to the profile.
+                        Your details have been kept. Try again or cancel to return
+                        to the profile.
                       </Text>
                     </div>
                   )}
@@ -1283,33 +1230,48 @@ export function PatientRecordPanels({
                     </Text>
                   )}
                 </>
-              )}
-              <DialogFooter>
+              </div>
+              <DialogFooter className="shrink-0">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setDraft(null)}
                 >
-                  {referralResult === "success" ? "Close" : "Cancel"}
+                  {draft.action === "referral-details" ? "Close" : "Cancel"}
                 </Button>
-                {referralResult !== "success" && (
+                  {draft.action !== "referral-details" && (
                   <Button
                     type="submit"
+                    disabled={draft.action === "referral" && !hasContactDetails}
                     variant={
-                      draft.action === "remove" ? "destructive" : "default"
+                      ["remove", "cancel-order", "delete-visit-outcome", "clear-need"].includes(draft.action) ? "destructive" : "default"
                     }
                   >
                     {draft.action === "remove"
-                      ? "Remove in preview"
+                      ? draft.collection === "orders" ? "Delete order" : "Remove"
+                      : draft.action === "delete-visit-outcome"
+                        ? "Delete outcome"
+                      : draft.action === "clear-need"
+                        ? "Clear assessment"
+                      : draft.action === "cancel-order"
+                        ? "Cancel order"
                       : draft.action === "hie"
-                        ? "Preview PCP update"
+                        ? "Send update"
                         : draft.action === "referral"
                           ? referralResult === "failure"
-                            ? "Retry preview"
-                            : "Preview submission"
-                          : "Apply to preview"}
+                            ? "Try again"
+                            : "Submit referral"
+                          : draft.action === "message"
+                            ? "Send message"
+                            : draft.action === "visit"
+                              ? draft.mode === "edit" ? "Save changes" : "Complete visit"
+                              : draft.action === "note"
+                                ? "Add note"
+                                : draft.action === "order"
+                                  ? draft.id ? "Save changes" : "Record order"
+                                  : "Save changes"}
                   </Button>
-                )}
+                  )}
               </DialogFooter>
             </form>
           )}

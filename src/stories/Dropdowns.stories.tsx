@@ -41,7 +41,7 @@ function DropdownExamples() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {["All alerts", "Red flag", "Yellow flag", "No alerts"].map(
+                {["All alerts", "Critical", "Warning", "No alerts"].map(
                   (value) => (
                     <SelectItem value={value} key={value}>
                       {value}

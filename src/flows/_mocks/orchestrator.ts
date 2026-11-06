@@ -1,4 +1,5 @@
 import { paginationProfiles } from "./pagination-patients";
+import { createMeasurementReadings, type MeasurementReading } from "./measurement-readings";
 
 /** Fictional presentation fixtures. Snapshot: 19 Oct 2026, 12:00 UTC.
  * WBS: Orchestrator (FULL) rows 23–31, 50–57, 108–113, 117–121.
@@ -10,10 +11,10 @@ export type Metric = {
   unit: string;
   date: string;
   note: string;
-  trend?: string;
   history?: string;
   baseline?: string;
   target?: string;
+  readings?: MeasurementReading[];
 };
 export type Patient = {
   id: string;
@@ -35,6 +36,7 @@ export type Patient = {
   alertDate: string;
   recommendationId?: string;
   additionalOutcome?: Patient["outcome"];
+  additionalOutcomes?: Patient["outcome"][];
   outcome: {
     track: string;
     measure: string;
@@ -55,12 +57,12 @@ const ckmOutcome = {
   measure: "Blood pressure control",
   baseline: "152/92 mmHg · Apr 19",
   current: "146/88 mmHg · Oct 9",
-  target: "Systolic reduction ≥10 mmHg or BP <130/80",
+  target: "≥10 mmHg systolic reduction or BP <130/80",
   status: "Not Met",
   quality: "Recent data outdated",
   projection: "Insufficient recent data",
   progress: 60,
-  progressLabel: "6 of 10 mmHg systolic reduction",
+  progressLabel: "Systolic reduction: 6 of 10 mmHg",
   window: "Apr 19, 2026 – Apr 18, 2027",
   remaining: "181 days remaining",
 };
@@ -71,7 +73,6 @@ const thomasMetrics: Metric[] = [
     unit: "mmHg",
     date: "Oct 9, 2026 · 09:00 UTC",
     note: "Last reading 10 days ago",
-    trend: "24,18 64,34 104,29 144,49 184,44 224,58 264,64",
     history:
       "Sep 18: 152/92; Sep 22: 150/90; Sep 25: 151/90; Sep 29: 148/89; Oct 2: 149/90; Oct 5: 147/89; Oct 9: 146/88 mmHg",
     baseline: "152/92 mmHg",
@@ -83,7 +84,6 @@ const thomasMetrics: Metric[] = [
     unit: "%",
     date: "Sep 22, 2026",
     note: "Most recent laboratory result",
-    trend: "24,20 84,24 144,44 204,52 264,59",
     history:
       "May 12: 7.9%; Jun 16: 7.8%; Jul 21: 7.6%; Aug 18: 7.5%; Sep 22: 7.4%",
   },
@@ -109,7 +109,6 @@ const bhMetrics: Metric[] = [
     unit: "/ 27",
     date: "Oct 18, 2026 · 10:00 UTC",
     note: "Patient-reported questionnaire",
-    trend: "24,23 84,35 144,32 204,52 264,60",
     history: "Jun 18: 16; Jul 18: 15; Aug 18: 15; Sep 18: 13; Oct 18: 12",
     baseline: "16",
     target: "≥5-point improvement or score <5",
@@ -122,7 +121,6 @@ const painMetrics: Metric[] = [
     unit: "/ 10",
     date: "Oct 18, 2026 · 11:00 UTC",
     note: "Functional PROM: improvement recorded",
-    trend: "24,20 84,38 144,34 204,60 264,60",
     history: "Jun 18: 6; Jul 18: 5; Aug 18: 5; Sep 18: 4; Oct 18: 4",
     baseline: "6 / 10",
     target: "≥2-point reduction and functional improvement",
@@ -152,7 +150,6 @@ const originalPatients: Patient[] = [
         unit: "mmHg",
         date: "Oct 19, 2026 · 08:00 UTC",
         note: "Recent data complete",
-        trend: "24,60 84,54 144,42 204,32 264,22",
         history:
           "Oct 5: 150/90; Oct 8: 152/91; Oct 12: 154/92; Oct 16: 156/93; Oct 19: 158/94 mmHg",
       },
@@ -166,7 +163,7 @@ const originalPatients: Patient[] = [
       quality: "Recent data complete",
       projection: "At risk of not meeting target",
       progress: 20,
-      progressLabel: "2 of 10 mmHg systolic reduction",
+      progressLabel: "Systolic reduction: 2 of 10 mmHg",
     },
   },
   {
@@ -247,7 +244,6 @@ const originalPatients: Patient[] = [
         unit: "/ 27",
         date: "Oct 11, 2026 · 10:00 UTC",
         note: "Recent data outdated",
-        trend: "24,20 84,24 144,38 204,44 264,56",
         history: "Jun 11: 12; Jul 11: 12; Aug 11: 11; Sep 11: 10; Oct 11: 9",
       },
     ],
@@ -291,7 +287,6 @@ const originalPatients: Patient[] = [
         unit: "mmHg",
         date: "Oct 19, 2026 · 08:00 UTC",
         note: "Recent data complete",
-        trend: "24,20 84,28 144,42 204,52 264,65",
         history:
           "Jun 19: 142/86; Jul 19: 138/84; Aug 19: 136/82; Sep 19: 132/78; Oct 19: 128/76 mmHg",
       },
@@ -301,7 +296,6 @@ const originalPatients: Patient[] = [
         unit: "/ 27",
         date: "Oct 19, 2026 · 10:00 UTC",
         note: "Recent data complete",
-        trend: "24,20 84,28 144,42 204,52 264,65",
         history: "Jun 19: 10; Jul 19: 8; Aug 19: 7; Sep 19: 6; Oct 19: 4",
       },
     ],
@@ -354,7 +348,6 @@ const originalPatients: Patient[] = [
         unit: "mmHg",
         date: "Oct 7, 2026 · 09:00 UTC",
         note: "Last reading 12 days ago",
-        trend: "24,20 84,35 144,44 204,56 264,65",
         history:
           "Jun 7: 146/88; Jul 7: 144/87; Aug 7: 141/85; Sep 7: 138/84; Oct 7: 136/82 mmHg",
       },
@@ -454,13 +447,13 @@ export const patients: Patient[] = [
     ...identity,
     recommendationId: undefined,
   })),
-];
+].map(patient => ({ ...patient, metrics: patient.metrics.map(metric => ({ ...metric, readings: createMeasurementReadings(metric) })) }));
 export const recommendations = [
   {
     id: "outreach-1002",
     patientId: patients[1].id,
-    title: "Reconnect with Thomas about home readings",
-    text: "Contact the patient to understand why blood pressure readings have stopped.",
+    title: "Follow up on missing blood pressure measurements",
+    text: "Contact the patient to check for difficulties measuring blood pressure at home and agree on the next measurement.",
     explanation:
       "The last available blood pressure reading was recorded on October 9. No new BP readings are available for the following 10 days.",
     signal: "No BP reading in 10 days",
@@ -475,8 +468,8 @@ export const recommendations = [
     title: "Review the open alert for Elena",
     text: "Review the recorded blood pressure trend and open alert in the patient’s clinical context.",
     explanation:
-      "An existing red alert and the recent BP measurements have been provided for review. The alert is not derived by this interface.",
-    signal: "Existing red alert · BP trend available",
+      "A critical alert is open. Review recent blood pressure readings and follow up with the patient.",
+    signal: "Existing critical alert · BP trend available",
     signalDate: "Oct 19, 2026 · 08:05 UTC",
     modified:
       "Review Elena’s recent readings with the care team before deciding on follow-up.",
@@ -488,8 +481,8 @@ export const recommendations = [
     title: "Review the open alert for Sofia",
     text: "Review the existing alert and recent PHQ-9 questionnaire in the patient’s clinical context.",
     explanation:
-      "An existing red alert is associated with this patient. The PHQ-9 history is available as context and does not itself explain the alert severity.",
-    signal: "Existing red alert · PHQ-9 available",
+      "An existing critical alert is associated with this patient. The PHQ-9 history is available as context and does not itself explain the alert severity.",
+    signal: "Existing critical alert · PHQ-9 available",
     signalDate: "Oct 18, 2026 · 10:05 UTC",
     modified:
       "Discuss Sofia’s questionnaire and open alert with the assigned care team.",
@@ -501,7 +494,7 @@ export const recommendations = [
     title: "Follow up on William’s monitoring gap",
     text: "Contact the patient to understand the gap in questionnaire responses.",
     explanation:
-      "The last available PHQ-9 response was recorded on October 11, eight days before this snapshot.",
+      "The last available PHQ-9 response was recorded on October 11, eight days ago.",
     signal: "No PHQ-9 response in 8 days",
     signalDate: "Oct 11, 2026 · 10:00 UTC",
     modified:
@@ -511,8 +504,8 @@ export const recommendations = [
   {
     id: "outreach-1006",
     patientId: patients[5].id,
-    title: "Follow up on Daniel’s missing readings",
-    text: "Contact the patient to understand why blood pressure readings have stopped.",
+    title: "Follow up on missing blood pressure measurements",
+    text: "Contact the patient to check for difficulties measuring blood pressure at home and agree on the next measurement.",
     explanation:
       "The last BP reading is 12 days old. No clinical alert is recorded; a monitoring gap is shown separately.",
     signal: "No BP reading in 12 days · no open alert",
@@ -550,7 +543,7 @@ export const monitoringViews: Record<
     chips: [],
   },
   red: {
-    label: "Red flags",
+    label: "Critical alerts",
     rows: [patients[0], patients[2], patients[8], patients[10], patients[16], patients[18], patients[24], patients[26], patients[32], patients[34], patients[40], patients[42], patients[48], patients[50], patients[56], patients[58], patients[64], patients[66]],
     count: "18",
     alert: "red",
@@ -558,10 +551,10 @@ export const monitoringViews: Record<
     recency: "all",
     sort: "risk",
     query: "",
-    chips: ["Red flag"],
+    chips: ["Critical"],
   },
   yellow: {
-    label: "Yellow flags",
+    label: "Warnings",
     rows: [patients[1], patients[3], patients[9], patients[11], patients[17], patients[19], patients[25], patients[27], patients[33], patients[35], patients[41], patients[43], patients[49], patients[51], patients[57], patients[59], patients[65], patients[67]],
     count: "18",
     alert: "yellow",
@@ -569,7 +562,7 @@ export const monitoringViews: Record<
     recency: "all",
     sort: "risk",
     query: "",
-    chips: ["Yellow flag"],
+    chips: ["Warning"],
   },
   clear: {
     label: "No alerts",

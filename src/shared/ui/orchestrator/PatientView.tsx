@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -22,7 +23,7 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Heading, Text } from "@/shared/ui/typography";
 import { Shell } from "./Shell";
-import { Flag, TrackBadges, MetricCard, BlankState } from "./Clinical";
+import { Flag, TrackBadges, MetricCard, BlankState, statusBadgeClassName } from "./Clinical";
 import {
   PatientRecordPanels,
   type PatientActionPreview,
@@ -32,7 +33,10 @@ import {
   type PatientRecord,
 } from "@/flows/_mocks/patient-records";
 import { demoThomas, type Patient } from "@/flows/_mocks/orchestrator";
-import { mockClinician } from "@/flows/_mocks/clinician";
+import { mockClinician, type CareTeamUser } from "@/flows/_mocks/clinician";
+import { followPreviewLink, type RecommendationDecisions, type RecommendationReturnTab } from "./recommendation-navigation";
+import { patientReturnHref } from "./workspace-navigation";
+import { Empty } from "./RecordPanels";
 
 type Props = {
   patient?: Patient;
@@ -41,7 +45,14 @@ type Props = {
   tabsAppearance?: "current" | "line";
   actingUser?: string;
   referralPreviewOutcome?: "success" | "failure";
+  messagePreviewOutcome?: "success" | "failure";
   onActionPreview?: (action: PatientActionPreview) => void;
+  recommendationDecisions?: RecommendationDecisions;
+  onRecommendationOpen?: (id: string, tab: RecommendationReturnTab) => void;
+  onBackToList?: () => void;
+  onRecordChange?: (record: PatientRecord) => void;
+  initialOutcomeTrack?: string;
+  careUsers?: CareTeamUser[];
   returnView?: string;
   appBase?: string;
   state?: "ready" | "loading" | "error" | "not-found";
@@ -53,7 +64,14 @@ export function PatientView({
   tabsAppearance = "line",
   actingUser = mockClinician.name,
   referralPreviewOutcome = "success",
+  messagePreviewOutcome = "success",
   onActionPreview,
+  recommendationDecisions = {},
+  onRecommendationOpen,
+  onBackToList,
+  onRecordChange,
+  initialOutcomeTrack,
+  careUsers,
   returnView = "all",
   appBase = "",
   state = "ready",
@@ -67,11 +85,12 @@ export function PatientView({
   );
   const outcomes = [
     patient.outcome,
-    ...(patient.additionalOutcome ? [patient.additionalOutcome] : []),
+    ...(patient.additionalOutcomes ?? (patient.additionalOutcome ? [patient.additionalOutcome] : [])),
   ];
-  const back = `${appBase}/monitoring/${returnView}#patient-${patient.displayId}`;
-  const recHref = `${appBase}/patients/${patient.id}/from/${returnView}/recommendations/${patient.recommendationId}`;
-  const [outcomeTrack, setOutcomeTrack] = useState(patient.outcome.track);
+  const back = `${patientReturnHref(returnView, appBase)}#patient-${patient.displayId}`;
+  const pendingRecommendations = details?.recommendations.filter((item) => !recommendationDecisions[item.id]) ?? [];
+  const recHref = `${appBase}/patients/${patient.id}/from/${returnView}/recommendations/${pendingRecommendations[0]?.id}#overview`;
+  const [outcomeTrack, setOutcomeTrack] = useState(initialOutcomeTrack ?? patient.outcome.track);
   const o =
     outcomes.find((outcome) => outcome.track === outcomeTrack) ??
     patient.outcome;
@@ -79,12 +98,7 @@ export function PatientView({
     <Shell section="patient" appBase={appBase}>
       <a
         href={back}
-        onClick={(event) => {
-          if (window.history.length > 1) {
-            event.preventDefault();
-            window.history.back();
-          }
-        }}
+        onClick={(event) => followPreviewLink(event, onBackToList)}
         className="mb-6 inline-flex min-h-8 items-center gap-2 rounded-sm text-sm text-muted-foreground hover:text-primary"
       >
         <ArrowLeft className="size-4" />
@@ -119,7 +133,7 @@ export function PatientView({
               <TrackBadges tracks={patient.tracks} size="md" />
               <Badge
                 variant="outline"
-                className="h-8 rounded-full bg-card px-3 py-1 text-sm"
+                className="h-8 rounded-full border border-border bg-card px-3 py-1 text-sm"
               >
                 Risk <span className="ml-1 font-semibold">{patient.risk}</span>
               </Badge>
@@ -127,7 +141,7 @@ export function PatientView({
             </div>
           </div>
           <Tabs value={tab} onValueChange={setTab}>
-            <div className={tabsAppearance === "line" ? "sticky top-[calc(var(--devbar-height)+4rem+1px)] z-10 mb-5 flex min-w-0 overflow-x-auto overflow-y-hidden border-b border-border bg-background pt-2" : "sticky top-[calc(var(--devbar-height)+4rem+1px)] z-10 mb-5 min-w-0 overflow-x-auto overflow-y-hidden border-b bg-background py-2"}>
+            <div className={tabsAppearance === "line" ? "sticky top-[calc(var(--devbar-height)+4rem+1px)] z-10 mb-5 flex min-w-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b border-border bg-background pt-2" : "sticky top-[calc(var(--devbar-height)+4rem+1px)] z-10 mb-5 min-w-0 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden border-b bg-background py-2"}>
               <TabsList
                 aria-label="Patient record sections"
                 variant={tabsAppearance === "line" ? "line" : "default"}
@@ -173,31 +187,20 @@ export function PatientView({
                             ? `No ${patient.measurementType} readings for ${patient.elapsed.replace(" ago", "")}`
                             : patient.reason}
                         </Heading>
-                        <Badge
-                          variant="outline"
-                          className="border-current/15 bg-card/60 text-xs"
-                        >
-                          Read-only
-                        </Badge>
                       </div>
-                      <Text className="mt-2 leading-relaxed">
+                      {patient.overdue && (
+                        <Text variant="small" className="mt-2">
+                          Last reading: {metrics.find(metric => metric.label === patient.measurementType || (patient.measurementType === "BP" && metric.label === "Blood pressure") || (patient.measurementType === "Pain" && metric.label === "Pain score"))?.date ?? patient.lastDate}
+                        </Text>
+                      )}
+                      <Text className="mt-3 leading-relaxed">
                         {patient.overdue
-                          ? `Last ${patient.measurementType}: ${patient.lastDate}. Contact the patient to understand the gap in monitoring.`
-                          : "An existing alert is open. Review the recorded signals and recommendation in the patient’s clinical context."}
-                      </Text>
-                      <Text variant="small" className="mt-2">
-                        {patient.flag === "none"
-                          ? "Monitoring gap only · No clinical alert recorded"
-                          : `Open ${patient.flag} flag · ${patient.alertDate}`}{" "}
-                        · Informational action ·{" "}
-                        {patient.overdue
-                          ? "Check access to monitoring and agree on the next reading."
+                          ? "Contact the patient to check for monitoring difficulties and agree on the next reading."
                           : "Review recorded signals with the assigned care team."}
                       </Text>
                       <Button
-                        variant="ghost"
-                        size="sm"
-                        className="mt-3 px-0 text-primary"
+                        variant="outline"
+                        className="mt-4 h-10 px-4"
                         onClick={() =>
                           setTab(
                             patient.flag === "none" ? "care" : "escalations",
@@ -221,7 +224,7 @@ export function PatientView({
                 </div>
               )}
               <section aria-labelledby="latest-title">
-                <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
                   <Heading level={3} as="h2" id="latest-title">
                     Latest measurements
                   </Heading>
@@ -230,31 +233,32 @@ export function PatientView({
                   </Text>
                 </div>
                 <div
-                  className={`grid gap-4 sm:grid-cols-2 ${metrics.length > 2 ? "xl:grid-cols-4" : ""}`}
+                  className="grid gap-4 lg:grid-cols-2"
                 >
+                  {!metrics.length && <div className="lg:col-span-2"><Empty>No measurements recorded.</Empty></div>}
                   {metrics.map((m) => (
-                    <MetricCard key={m.label} metric={m} />
+                    <MetricCard key={m.label} metric={m} patientName={patient.name} patientId={patient.displayId} asOf={details.snapshotTimestamp} />
                   ))}
                 </div>
               </section>
-              <div className="grid items-start gap-5 xl:grid-cols-[1.4fr_1fr]">
+              <div className="clinical-panel grid overflow-hidden xl:grid-cols-[1.4fr_1fr]">
                 <section
                   aria-labelledby="outcome-title"
-                  className="clinical-panel p-5 sm:p-6"
+                  className="min-w-0 p-5 sm:p-6"
                 >
                   <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
                     <div>
-                      <Text className="section-kicker mb-2">
-                        Outcome tracker · {o.track}
-                      </Text>
-                      {patient.additionalOutcome ? (
+                      <Heading level={3} as="h2" id="outcome-title">
+                        Outcome tracker
+                      </Heading>
+                      {outcomes.length > 1 ? (
                         <Select
                           value={outcomeTrack}
                           onValueChange={setOutcomeTrack}
                         >
                           <SelectTrigger
                             aria-label="Outcome care track"
-                            className="mb-3"
+                            className="mt-3"
                           >
                             <SelectValue />
                           </SelectTrigger>
@@ -270,13 +274,13 @@ export function PatientView({
                           </SelectContent>
                         </Select>
                       ) : null}
-                      <Heading level={3} as="h2" id="outcome-title">
+                      <Heading level={4} as="h3" className="mt-2">
                         {o.measure}
                       </Heading>
                     </div>
                     <Badge
                       variant="outline"
-                      className={`rounded-full px-2.5 py-1 ${o.status === "Met" ? "border-success/15 bg-success-soft text-success" : o.status === "Cannot determine" ? "bg-muted text-muted-foreground" : "border-warning/15 bg-warning-soft text-warning"}`}
+                      className={`${statusBadgeClassName} ${o.status === "Met" ? "bg-success-soft text-success" : o.status === "Cannot determine" ? "bg-muted text-muted-foreground" : "bg-warning-soft text-warning"}`}
                     >
                       {o.status === "Met" ? <CheckCircle2 /> : <CircleDashed />}
                       {o.status}
@@ -293,9 +297,7 @@ export function PatientView({
                     </div>
                   </div>
                   <div className="my-5">
-                    <Text variant="small" className="mb-2">
-                      Progress toward the selected target
-                    </Text>
+                    <Text className="mb-2 font-medium">{o.progressLabel}</Text>
                     {o.progress !== null ? (
                       <Progress
                         aria-label={o.progressLabel}
@@ -303,12 +305,11 @@ export function PatientView({
                         className="h-2"
                       />
                     ) : null}
-                    <Text className="mt-2 font-medium">{o.progressLabel}</Text>
                     <Text variant="small" className="mt-2 leading-relaxed">
                       Target: {o.target}
                     </Text>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2 border-t pt-4">
                     <Text variant="small">
                       {o.window}
                       <span className="mt-1 block">
@@ -322,55 +323,69 @@ export function PatientView({
                       {o.remaining}
                     </Text>
                   </div>
-                  <div className="mt-5 space-y-2 rounded-lg border border-dashed p-3.5">
-                    <Text className="text-xs font-medium">Data quality</Text>
-                    <Text
-                      variant="small"
-                      className="inline-flex items-center gap-1.5"
+                  <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div className="min-w-0 space-y-2 rounded-lg border border-dashed p-3.5">
+                      <Text className="text-xs font-medium">Data quality</Text>
+                      <Text
+                        variant="small"
+                        className="inline-flex items-center gap-1.5"
+                      >
+                        {o.baseline === "Missing / incomplete" ? (
+                          <CircleDashed className="size-3.5" />
+                        ) : (
+                          <CheckCircle2 className="size-3.5" />
+                        )}
+                        {o.baseline === "Missing / incomplete"
+                          ? "Baseline missing / incomplete"
+                          : "Baseline available"}
+                      </Text>
+                      <Text variant="small" className="flex items-center gap-1.5">
+                        <Info className="size-3.5" />
+                        {o.quality}
+                      </Text>
+                    </div>
+                    <Alert
+                      role="group"
+                      aria-label="Outcome projection"
+                      className={`min-w-0 content-start rounded-xl p-3.5 ${o.projection.startsWith("Likely") ? "border-success/20 bg-success-soft text-success" : o.projection.startsWith("At risk") ? "border-warning/20 bg-warning-soft text-warning" : "border-border bg-muted/50 text-muted-foreground"}`}
                     >
-                      {o.baseline === "Missing / incomplete" ? (
-                        <CircleDashed className="size-3.5" />
+                      {o.projection.startsWith("Likely") ? (
+                        <CheckCircle2 aria-hidden="true" />
+                      ) : o.projection.startsWith("At risk") ? (
+                        <AlertTriangle aria-hidden="true" />
                       ) : (
-                        <CheckCircle2 className="size-3.5" />
+                        <Info aria-hidden="true" />
                       )}
-                      {o.baseline === "Missing / incomplete"
-                        ? "Baseline missing / incomplete"
-                        : "Baseline available"}
-                    </Text>
-                    <Text variant="small" className="flex items-center gap-1.5">
-                      <Info className="size-3.5" />
-                      {o.quality}
-                    </Text>
-                  </div>
-                  <div className="mt-4 rounded-lg bg-muted/50 p-3.5">
-                    <Text className="text-xs font-medium">
-                      Rule-based projection
-                    </Text>
-                    <Text className="mt-1 font-medium">{o.projection}</Text>
-                    <Text variant="small" className="mt-1 leading-relaxed">
-                      {o.projection.includes("Insufficient")
-                        ? "A projection is unavailable until sufficient recent measurements are provided."
-                        : "Projection based on recent measurements; separate from the current outcome status."}
-                    </Text>
+                      <AlertTitle>
+                        <Text className="text-xs font-medium">Outcome projection</Text>
+                        <Text className="mt-1 font-medium">{o.projection}</Text>
+                      </AlertTitle>
+                      <AlertDescription className="mt-1 text-current">
+                        {o.projection.includes("Insufficient")
+                          ? "A projection is unavailable until sufficient recent measurements are provided."
+                          : "Projection based on recent measurements; separate from the current outcome status."}
+                      </AlertDescription>
+                    </Alert>
                   </div>
                 </section>
-                <div className="space-y-5">
+                <div className="flex min-w-0 flex-col divide-y divide-border border-t border-border xl:border-t-0 xl:border-l">
                   <section
                     aria-labelledby="recommendation-title"
-                    className="clinical-panel p-5 sm:p-6"
+                    className="flex flex-1 flex-col p-5 sm:p-6"
                   >
-                    <Text className="section-kicker mb-3">Next review</Text>
-                    <Heading level={3} as="h2" id="recommendation-title">
-                      {details.recommendations[0]?.title ??
+                    <Heading level={3} as="h2" id="recommendation-title">Recommendations</Heading>
+                    <Heading level={4} as="h3" className="mt-3">
+                      {pendingRecommendations[0]?.title ??
                         "No recommendation pending"}
                     </Heading>
                     <Text variant="muted" className="mt-3 leading-relaxed">
-                      {details.recommendations[0]?.text ??
+                      {pendingRecommendations[0]?.text ??
                         "Review the care plan and recent clinical events for ongoing follow-up."}
                     </Text>
-                    {patient.recommendationId ? (
-                      <Button className="mt-5 w-full" asChild>
-                        <a href={recHref}>
+                    <div className="mt-auto pt-5">
+                    {pendingRecommendations[0] ? (
+                      <Button className="w-full" asChild>
+                        <a href={recHref} onClick={(event) => followPreviewLink(event, onRecommendationOpen ? () => onRecommendationOpen(pendingRecommendations[0].id, "overview") : undefined)}>
                           Review recommendation
                           <ArrowRight />
                         </a>
@@ -378,38 +393,32 @@ export function PatientView({
                     ) : (
                       <Button
                         variant="outline"
-                        className="mt-5"
                         onClick={() => setTab("care")}
                       >
                         View care plan
                         <ArrowRight />
                       </Button>
                     )}
-                    {patient.recommendationId && (
-                      <Text variant="small" className="mt-3">
-                        A recommendation decision does not close the clinical
-                        alert.
-                      </Text>
-                    )}
-                    {details.recommendations.length > 1 && (
+                    {pendingRecommendations.length > 1 && (
                       <Button
                         variant="ghost"
                         className="mt-2"
                         onClick={() => setTab("communications")}
                       >
-                        View all {details.recommendations.length}{" "}
+                        View all {pendingRecommendations.length}{" "}
                         recommendations
                       </Button>
                     )}
+                    </div>
                   </section>
                   <section
-                    className="clinical-panel p-5 sm:p-6"
+                    className="shrink-0 p-5 sm:p-6"
                     aria-labelledby="care-context-title"
                   >
                     <Heading level={3} as="h2" id="care-context-title">
-                      Care context
+                      Patient context
                     </Heading>
-                    <dl className="mt-4 grid gap-4 text-sm">
+                    <dl className="mt-4 grid gap-x-6 gap-y-5 text-sm sm:grid-cols-2">
                       <div>
                         <dt className="text-muted-foreground">
                           Preferred contact
@@ -423,7 +432,7 @@ export function PatientView({
                         <dt className="text-muted-foreground">
                           Monitoring support
                         </dt>
-                        <dd className="mt-1">
+                        <dd className="mt-1 font-medium">
                           {details.profile.digitalLiteracy}
                         </dd>
                       </div>
@@ -431,13 +440,13 @@ export function PatientView({
                         <dt className="text-muted-foreground">
                           Transportation
                         </dt>
-                        <dd className="mt-1">
+                        <dd className="mt-1 font-medium">
                           {details.profile.transportation}
                         </dd>
                       </div>
                       <div>
                         <dt className="text-muted-foreground">Assigned hub</dt>
-                        <dd className="mt-1">{details.profile.hub}</dd>
+                        <dd className="mt-1 font-medium">{details.profile.hub}</dd>
                       </div>
                     </dl>
                     <Button
@@ -459,15 +468,22 @@ export function PatientView({
             </TabsContent>
             <PatientRecordPanels
               patient={patient}
-              record={details}
+              record={{ ...details, recommendations: pendingRecommendations }}
+              careUsers={careUsers}
+              recommendationDecisions={Object.values(recommendationDecisions).filter((action) => action.patientId === patient.id)}
+              onRecommendationOpen={onRecommendationOpen}
+              onCarePlanOpen={() => setTab("care")}
               actingUser={actingUser}
               returnView={returnView}
               appBase={appBase}
               onActionPreview={onActionPreview}
               referralPreviewOutcome={referralPreviewOutcome}
-              onRecordPreview={(update) =>
-                setDetails((current) => (current ? update(current) : current))
-              }
+              messagePreviewOutcome={messagePreviewOutcome}
+              onRecordPreview={(update) => {
+                const next = update(details);
+                setDetails(next);
+                onRecordChange?.(next);
+              }}
             />
           </Tabs>
         </>

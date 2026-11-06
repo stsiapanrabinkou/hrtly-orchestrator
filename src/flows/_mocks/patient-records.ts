@@ -1,4 +1,5 @@
 import { patients, recommendations, type Patient } from "./orchestrator";
+import { measurementSnapshot } from "./measurement-readings";
 
 /** Fictional, session-only design fixtures. No clinical rules or integrations run here.
  * WBS: Orchestrator (FULL) 24–31, 60–65, 68, 70–73, 108, 114, 167–168.
@@ -12,9 +13,19 @@ export type TimelineEvent = {
   detail: string;
   source: string;
 };
+export type CarePlanSnapshot = {
+  goals: { id: string; title: string; target: string; owner: string }[];
+  activities: { id: string; title: string; owner: string }[];
+  team: { id: string; userId: string; name: string; role: string }[];
+};
 export type PatientRecord = {
   patientId: string;
   snapshot: string;
+  snapshotTimestamp: number;
+  carePlanUpdate: {
+    lastSentAt: string | null;
+    lastSentPlan: CarePlanSnapshot | null;
+  };
   profile: {
     medicareId: string;
     phone: string;
@@ -34,22 +45,38 @@ export type PatientRecord = {
     status: string;
     elapsed: string;
   }[];
-  team: { id: string; name: string; role: string }[];
+  team: CarePlanSnapshot["team"];
+  consents?: { hipaa: boolean; access: boolean; date: string; author: string };
   caregivers: { name: string; relationship: string; permissions: string }[];
   timeline: TimelineEvent[];
   escalations: {
     id: string;
     date: string;
+    timestamp: number;
+    severity: "red" | "yellow";
+    status: "Open";
     title: string;
     action: string;
     note: string;
     author: string;
+    noteDate: string | null;
     delivery: string;
   }[];
   goals: { id: string; title: string; target: string; owner: string }[];
   activities: { id: string; title: string; owner: string }[];
   notes: { id: string; text: string; author: string; date: string }[];
-  orders: { id: string; type: string; detail: string; date: string }[];
+  orders: {
+    id: string;
+    type: string;
+    detail: string;
+    date: string;
+    author: string;
+    status: "Recorded" | "Cancelled";
+    updatedBy?: string;
+    updatedAt?: string;
+    cancelledBy?: string;
+    cancelledAt?: string;
+  }[];
   visits: {
     id: string;
     date: string;
@@ -57,18 +84,27 @@ export type PatientRecord = {
     status: string;
     summary: string;
     reminder: string;
+    outcomeAuthor?: string;
+    outcomeRecordedAt?: string;
+    outcomeUpdatedBy?: string;
+    outcomeUpdatedAt?: string;
   }[];
   needs: {
     category: string;
     status: string;
     notes: string;
+    otherCategory?: string;
     captured: string;
     author: string;
   }[];
-  referrals: { id: string; category: string; reason: string; status: string }[];
+  referrals: {
+    id: string; category: string; reason: string; status: string;
+    author: string; date: string; sharedContacts: { label: string; value: string }[];
+  }[];
   messages: {
     id: string;
     direction: "incoming" | "outgoing";
+    timestamp: number;
     text: string;
     date: string;
     author: string;
@@ -150,7 +186,7 @@ function createRecord(patient: Patient, index: number): PatientRecord {
   const thomas = patient.displayId === "P-1002";
   const outcomes = [
     patient.outcome,
-    ...(patient.additionalOutcome ? [patient.additionalOutcome] : []),
+    ...(patient.additionalOutcomes ?? (patient.additionalOutcome ? [patient.additionalOutcome] : [])),
   ];
   const timeline: TimelineEvent[] = patient.metrics
     .filter(
@@ -158,52 +194,58 @@ function createRecord(patient: Patient, index: number): PatientRecord {
         metric.value !== "Not applicable" && metric.value !== "No data",
     )
     .flatMap((metric, metricIndex) => {
-      const entries = metric.history?.split("; ") ?? [];
-      return entries.map((entry, entryIndex) => {
-        const [date, ...value] = entry.split(": ");
-        const month =
-          [
-            "Jan",
-            "Feb",
-            "Mar",
-            "Apr",
-            "May",
-            "Jun",
-            "Jul",
-            "Aug",
-            "Sep",
-            "Oct",
-            "Nov",
-            "Dec",
-          ].indexOf(date.slice(0, 3)) + 1;
-        return {
-          id: `${metricIndex}-${entryIndex}`,
-          date: `${date}, 2026`,
-          sortDate: `2026-${String(month).padStart(2, "0")}-${date.slice(4).padStart(2, "0")}`,
-          type:
-            metric.label === "HbA1c"
-              ? "Lab result"
-              : metric.label === "Blood pressure"
-                ? "Vital sign"
-                : "Patient report",
-          title: metric.label,
-          detail:
-            `${value.join(": ")}${value.join(": ").includes(metric.unit) ? "" : ` ${metric.unit}`}`.trim(),
-          source:
-            metric.label === "HbA1c"
-              ? "Laboratory observation"
-              : metric.label === "Blood pressure"
-                ? "Home monitoring"
-                : "Patient questionnaire",
-        };
-      });
+      const labResult = ["HbA1c", "Creatinine", "Lipid panel"].includes(metric.label);
+      return (metric.readings ?? []).map((reading, entryIndex) => ({
+        id: `${metricIndex}-${entryIndex}`,
+        date: reading.dateLabel,
+        sortDate: new Date(reading.timestamp).toISOString(),
+        type: labResult
+          ? "Lab result"
+          : metric.label === "Blood pressure"
+            ? "Vital sign"
+            : "Patient report",
+        title: metric.label,
+        detail: `${reading.value}${reading.secondary === undefined ? "" : `/${reading.secondary}`} ${metric.unit}`.trim(),
+        source: labResult
+          ? "Laboratory observation"
+          : metric.label === "Blood pressure"
+            ? "Home monitoring"
+            : "Patient questionnaire",
+      }));
     });
   if (thomas)
     timeline.push(
       {
+        id: "creatinine-1002",
+        date: "Sep 22, 2026",
+        sortDate: "2026-09-22T00:00:00.000Z",
+        type: "Lab result",
+        title: "Creatinine",
+        detail: "1.1 mg/dL",
+        source: "Laboratory observation",
+      },
+      {
+        id: "lipids-1002",
+        date: "Sep 22, 2026",
+        sortDate: "2026-09-22T00:00:00.000Z",
+        type: "Lab result",
+        title: "Lipid panel",
+        detail: "Total cholesterol: 192 mg/dL\nLDL: 112 mg/dL\nHDL: 48 mg/dL\nTriglycerides: 160 mg/dL",
+        source: "Laboratory observation",
+      },
+      {
+        id: "visit-1002-open",
+        date: "Oct 19, 2026 · 10:00 UTC",
+        sortDate: "2026-10-19T10:00:00.000Z",
+        type: "Visit",
+        title: "Monitoring follow-up · awaiting documentation",
+        detail: "Visit outcome has not been documented.",
+        source: "Sarah Lewis, MD",
+      },
+      {
         id: "coaching-1002",
         date: "Oct 10, 2026 · 10:00 UTC",
-        sortDate: "2026-10-10T10:00",
+        sortDate: "2026-10-10T10:00:00.000Z",
         type: "Coaching message",
         title: "Home monitoring reminder",
         detail:
@@ -213,7 +255,7 @@ function createRecord(patient: Patient, index: number): PatientRecord {
       {
         id: "visit-1002",
         date: "Sep 30, 2026 · 14:00 UTC",
-        sortDate: "2026-09-30T14:00",
+        sortDate: "2026-09-30T14:00:00.000Z",
         type: "Visit",
         title: "Care plan review · completed",
         detail:
@@ -222,79 +264,7 @@ function createRecord(patient: Patient, index: number): PatientRecord {
       },
     );
   timeline.sort((a, b) => b.sortDate.localeCompare(a.sortDate));
-  return {
-    patientId: patient.id,
-    snapshot: "Oct 19, 2026 · 12:00 UTC",
-    profile: {
-      medicareId: known
-        ? `DEMO-${patient.displayId.slice(2)} · fictional ID`
-        : "Not recorded",
-      phone: known
-        ? `+1 (202) 555-${String(100 + index).padStart(4, "0")}`
-        : "Not recorded",
-      email: known
-        ? `${patient.name.toLowerCase().replaceAll(" ", ".")}@example.test`
-        : "Not recorded",
-      address: known
-        ? `${120 + index} Example Street, New York, NY 10001`
-        : "Not recorded",
-      pcp: known ? "Alex Chen, MD · Example Primary Care" : "Not recorded",
-      ...personal,
-    },
-    enrollments: outcomes.map((o) => ({
-      track: o.track,
-      start:
-        o.window === "Window not established" ? "Not recorded" : "Apr 19, 2026",
-      baseline: o.baseline,
-      status: "Active",
-      elapsed:
-        o.window === "Window not established"
-          ? "Days elapsed unavailable"
-          : "183 days elapsed",
-    })),
-    team: known
-      ? [
-          { id: "physician", name: personal.clinician, role: "Physician" },
-          {
-            id: "coordinator",
-            name: index % 2 ? "Maya Torres, RN" : "Jordan Kim, RN",
-            role: "Care coordinator",
-          },
-        ]
-      : [],
-    caregivers: thomas
-      ? [
-          {
-            name: "Anna Reed",
-            relationship: "Daughter · caregiver",
-            permissions:
-              "View care plan and appointment reminders · no messaging access",
-          },
-        ]
-      : [],
-    timeline,
-    escalations:
-      patient.flag === "none"
-        ? []
-        : [
-            {
-              id: `alert-${patient.displayId}`,
-              date: patient.alertDate,
-              title: `${patient.flag === "red" ? "Red" : "Yellow"} alert · ${patient.reason}`,
-              action: patient.overdue
-                ? "Contact the patient to understand the monitoring gap and agree on the next measurement."
-                : "Review the existing alert with the assigned clinical team.",
-              note: known
-                ? thomas
-                  ? "Phone outreach requested. Check whether Thomas needs help with the monitor before agreeing on the next reading."
-                  : "Assigned care team to review the recorded signals and determine follow-up."
-                : "No clinician note recorded.",
-              author: known ? personal.clinician : "Not recorded",
-              delivery: known
-                ? "Patient and care team notified · delivery recorded in audit"
-                : "Delivery information unavailable",
-            },
-          ],
+  const plan: CarePlanSnapshot = {
     goals: known
       ? outcomes.map((o) => ({
           id: `goal-${o.track}`,
@@ -318,6 +288,104 @@ function createRecord(patient: Patient, index: number): PatientRecord {
           },
         ]
       : [],
+    team: known
+      ? [
+          {
+            id: "physician",
+            userId: personal.clinician === "Sarah Lewis, MD" ? "user-sarah-lewis" : "user-james-patel",
+            name: personal.clinician,
+            role: "Physician",
+          },
+          {
+            id: "coordinator",
+            userId: index % 2 ? "user-maya-torres" : "user-jordan-kim",
+            name: index % 2 ? "Maya Torres, RN" : "Jordan Kim, RN",
+            role: "Care coordinator",
+          },
+        ]
+      : [],
+  };
+  return {
+    patientId: patient.id,
+    snapshot: "Oct 19, 2026 · 12:00 UTC",
+    snapshotTimestamp: measurementSnapshot,
+    carePlanUpdate: {
+      lastSentAt: known ? "Oct 16, 2026" : null,
+      lastSentPlan: known
+        ? {
+            goals: plan.goals.map((goal, goalIndex) =>
+              goalIndex === 0 ? { ...goal, owner: "Not assigned" } : goal,
+            ),
+            activities: plan.activities.filter((activity) => activity.id !== "follow-up"),
+            team: plan.team.filter((member) => member.id !== "coordinator"),
+          }
+        : null,
+    },
+    profile: {
+      medicareId: "Not recorded",
+      phone: known
+        ? `+1 (202) 555-${String(100 + index).padStart(4, "0")}`
+        : "Not recorded",
+      email: known
+        ? `${patient.name.toLowerCase().replaceAll(" ", ".")}@example.test`
+        : "Not recorded",
+      address: known
+        ? `${120 + index} West 24th Street, New York, NY 10001`
+        : "Not recorded",
+      pcp: known ? "Alex Chen, MD · Chelsea Primary Care" : "Not recorded",
+      ...personal,
+    },
+    enrollments: outcomes.map((o) => ({
+      track: o.track,
+      start:
+        o.window === "Window not established" ? "Not recorded" : "Apr 19, 2026",
+      baseline: o.baseline,
+      status: known && o.window !== "Window not established" ? "Active" : "Not recorded",
+      elapsed:
+        o.window === "Window not established"
+          ? "Days elapsed unavailable"
+          : "183 days elapsed",
+    })),
+    team: plan.team,
+    caregivers: thomas
+      ? [
+          {
+            name: "Anna Reed",
+            relationship: "Daughter · caregiver",
+            permissions:
+              "View care plan and appointment reminders · no messaging access",
+          },
+        ]
+      : [],
+    timeline,
+    escalations:
+      patient.flag === "none"
+        ? []
+        : [
+            {
+              id: `alert-${patient.displayId}`,
+              date: patient.alertDate,
+              timestamp: Date.parse(patient.alertDate.replace(" · ", " ")),
+              severity: patient.flag === "red" ? "red" : "yellow",
+              status: "Open",
+              title: patient.reason,
+              action: patient.overdue
+                ? "Contact the patient to understand the monitoring gap and agree on the next measurement."
+                : "Review the existing alert with the assigned clinical team.",
+              note: known
+                ? thomas
+                  ? "Phone outreach requested. Check whether Thomas needs help with the monitor before agreeing on the next reading."
+                  : "Assigned care team to review the recorded signals and determine follow-up."
+                : "",
+              author: known ? personal.clinician : "Not recorded",
+              noteDate: known ? patient.alertDate : null,
+              delivery: known
+                ? "Notifications sent to patient and care team."
+                : "Notification details not recorded.",
+            },
+          ],
+    goals: plan.goals,
+    activities: plan.activities,
     notes: thomas
       ? [
           {
@@ -332,6 +400,8 @@ function createRecord(patient: Patient, index: number): PatientRecord {
       ? [
           {
             id: "order-1002",
+            author: "Sarah Lewis, MD",
+            status: "Recorded",
             type: "Laboratory",
             detail: "HbA1c · routine monitoring",
             date: "Sep 15, 2026",
@@ -345,6 +415,8 @@ function createRecord(patient: Patient, index: number): PatientRecord {
             date: "Sep 30, 2026 · 14:00 UTC",
             type: "Care plan review",
             status: "Completed",
+            outcomeAuthor: "Sarah Lewis, MD",
+            outcomeRecordedAt: "Sep 30, 2026 · 14:00 UTC",
             summary:
               "Reviewed home monitoring routine and confirmed preferred contact by phone.",
             reminder: "24-hour email reminder recorded",
@@ -353,7 +425,7 @@ function createRecord(patient: Patient, index: number): PatientRecord {
             id: "visit-1002-open",
             date: "Oct 19, 2026 · 10:00 UTC",
             type: "Monitoring follow-up",
-            status: "Awaiting documentation",
+            status: "Outcome not recorded",
             summary: "",
             reminder:
               "24-hour email reminder delivered · Oct 18, 2026 · 10:00 UTC",
@@ -363,7 +435,7 @@ function createRecord(patient: Patient, index: number): PatientRecord {
     needs: ["Transportation", "Food", "Housing", "Other"].map((category) => ({
       category,
       status:
-        thomas && category === "Transportation"
+        known && category === "Transportation" && personal.transportation.startsWith("Yes")
           ? "Yes"
           : known && category !== "Other"
             ? "No"
@@ -380,6 +452,7 @@ function createRecord(patient: Patient, index: number): PatientRecord {
       ? [
           {
             id: "message-1002-in",
+            timestamp: Date.parse("2026-10-18T16:20:00Z"),
             direction: "incoming",
             text: "I am having trouble getting my monitor to connect. Could someone call me?",
             date: "Oct 18, 2026 · 16:20 UTC",
@@ -387,13 +460,14 @@ function createRecord(patient: Patient, index: number): PatientRecord {
           },
           {
             id: "message-1002-out",
+            timestamp: Date.parse("2026-10-19T09:00:00Z"),
             direction: "outgoing",
             text: "Thank you for letting us know. We have asked your care coordinator to call and help with the monitor.",
             date: "Oct 19, 2026 · 09:00 UTC",
             author: "Maya Torres, RN",
           },
         ]
-      : [],
+      : known ? [{ id: `message-${patient.displayId}`, direction: "incoming", timestamp: Date.parse("2026-10-18T15:00:00Z"), text: "I have a question about my care plan. Could someone from the team contact me?", date: "Oct 18, 2026 · 15:00 UTC", author: patient.name }] : [],
     recommendations: recommendations.filter((r) => r.patientId === patient.id),
   };
 }

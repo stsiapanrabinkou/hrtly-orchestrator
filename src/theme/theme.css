@@ -293,3 +293,12 @@
 }
 :root { --navigation-active: oklch(0.48 0.12 157); }
 .dark { --navigation-active: oklch(0.78 0.1 157); }
+
+@theme inline {
+  --color-toast-background: var(--toast-background);
+  --color-toast-foreground: var(--toast-foreground);
+}
+:root {
+  --toast-background: oklch(0 0 0);
+  --toast-foreground: oklch(1 0 0);
+}

@@ -1,361 +1,126 @@
+import { toast } from "sonner";
 import { useState } from "react";
-import {
-  ArrowLeft,
-  ArrowRight,
-  ClipboardList,
-  CircleCheck,
-  PencilLine,
-  X,
-  Info,
-  Clock3,
-  Check,
-  RotateCcw,
-} from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Check, Pencil, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Heading, Text } from "@/shared/ui/typography";
 import { Shell } from "./Shell";
 import { Flag, TrackBadges, BlankState } from "./Clinical";
-import {
-  demoThomas,
-  recommendations,
-  type Patient,
-  type Recommendation,
-} from "@/flows/_mocks/orchestrator";
+import { Detail, Panel } from "./RecordPanels";
+import { patientReturnHref } from "./workspace-navigation";
+import { demoThomas, recommendations, type Patient, type Recommendation } from "@/flows/_mocks/orchestrator";
+import { mockClinician } from "@/flows/_mocks/clinician";
+import { followPreviewLink, recommendationDecisionLabel, type RecommendationDecision, type RecommendationDecisionPreview, type RecommendationReturnTab } from "./recommendation-navigation";
 
-type Decision = "pending" | "accepted" | "modified" | "dismissed";
 type Props = {
   patient?: Patient;
   recommendation?: Recommendation;
   returnView?: string;
-  initialDecision?: Decision;
+  returnTab?: RecommendationReturnTab;
+  initialDecision?: RecommendationDecision;
+  initialAction?: RecommendationDecisionPreview;
+  actingUser?: string;
   appBase?: string;
   state?: "ready" | "loading" | "error" | "not-found";
-  onDecisionPreview?: (decision: Decision) => void;
+  onDecisionPreview?: (decision: RecommendationDecision, action: RecommendationDecisionPreview) => void;
+  onReturnToPatient?: (action?: RecommendationDecisionPreview) => void;
+  onPatientOpen?: () => void;
 };
 export function RecommendationView({
-  patient = demoThomas,
-  recommendation = recommendations[0],
-  returnView = "all",
-  initialDecision = "pending",
-  appBase = "",
-  state = "ready",
-  onDecisionPreview,
+  patient = demoThomas, recommendation = recommendations[0], returnView = "all", returnTab = "overview",
+  initialDecision = "pending", initialAction, actingUser = mockClinician.name, appBase = "", state = "ready",
+  onDecisionPreview, onReturnToPatient, onPatientOpen,
 }: Props) {
-  const [decision, setDecision] = useState<Decision>(initialDecision);
+  const [action, setAction] = useState<RecommendationDecisionPreview | undefined>(initialAction ?? (initialDecision !== "pending" ? {
+    recommendationId: recommendation.id, title: recommendation.title, patientId: patient.id, decision: initialDecision,
+    text: initialDecision === "modified" ? recommendation.modified : recommendation.text,
+    reason: "", author: actingUser, date: "Oct 19, 2026 · 12:05 UTC",
+  } : undefined));
   const [dialog, setDialog] = useState<"edit" | "dismiss" | null>(null);
-  const [edited, setEdited] = useState(recommendation.modified);
+  const [edited, setEdited] = useState(recommendation.text);
   const [reason, setReason] = useState("");
+  const decision = action?.decision ?? "pending";
   const overview = `${appBase}/patients/${patient.id}/from/${returnView}`;
-  const back = `${appBase}/monitoring/${returnView}#patient-${patient.displayId}`;
-  const preview = (next: Decision) => {
-    setDecision(next);
+  const patientHref = returnTab === "recommendations" ? `${appBase}/recommendations` : `${overview}#${returnTab}`;
+  const monitoring = `${patientReturnHref(returnView, appBase)}#patient-${patient.displayId}`;
+  const returnLabel = returnTab === "recommendations" ? "Return to recommendations" : returnTab === "communications" ? "Return to communications" : "Return to patient";
+  const returnToPatient = onReturnToPatient ? () => onReturnToPatient(action) : undefined;
+  const decide = (next: Exclude<RecommendationDecision, "pending">) => {
+    if (action || (next === "modified" && !edited.trim())) return;
+    const now = new Date();
+    const date = `${now.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })} · ${now.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" })} UTC`;
+    const result: RecommendationDecisionPreview = {
+      recommendationId: recommendation.id, title: recommendation.title, patientId: patient.id, decision: next,
+      text: next === "modified" ? edited.trim() : recommendation.text,
+      reason: next === "dismissed" ? reason.trim() : "", author: actingUser, date,
+    };
+    setAction(result);
     setDialog(null);
-    onDecisionPreview?.(next);
+    onDecisionPreview?.(next, result);
+    toast.success(next === "dismissed" ? "Recommendation dismissed." : "Recommendation approved.");
   };
-  const decisionLabel =
-    decision === "accepted"
-      ? "Accepted"
-      : decision === "modified"
-        ? "Modified and accepted"
-        : "Dismissed";
   return (
-    <Shell
-      section="recommendation"
-      appBase={appBase}
-    >
-      <a
-        href={state === "ready" ? overview : back}
-        className="mb-6 inline-flex min-h-8 items-center gap-2 rounded-sm text-sm text-muted-foreground hover:text-primary"
-      >
-        <ArrowLeft className="size-4" />
-        Back to {state === "ready" ? patient.name : "monitoring"}
-      </a>
+    <Shell section="recommendation" appBase={appBase}>
+      <a href={state === "ready" ? patientHref : monitoring} onClick={(event) => followPreviewLink(event, state === "ready" ? returnToPatient : undefined)} className="mb-6 inline-flex min-h-8 items-center gap-2 rounded-sm text-sm text-muted-foreground hover:text-primary"><ArrowLeft className="size-4" />Back to {state === "ready" ? returnTab === "recommendations" ? "recommendations" : patient.name : "workspace"}</a>
       {state !== "ready" ? (
-        <div className="clinical-panel">
-          <BlankState
-            kind={state === "not-found" ? "not-found" : state}
-            onReset={() => {
-              window.location.href = back;
-            }}
-          />
-        </div>
+        <div className="clinical-panel"><BlankState kind={state === "not-found" ? "not-found" : state} onReset={() => { if (state === "error") window.location.reload(); else window.location.href = monitoring; }} /></div>
       ) : (
         <>
-          <div className="mb-7 flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <Text className="section-kicker mb-2">Recommendation review</Text>
-              <Heading level={1}>Review recommendation</Heading>
-              <Text variant="muted" className="mt-2">
-                Review the explanation before choosing a response.
-              </Text>
-            </div>
-            <Badge
-              variant="outline"
-              className={`rounded-full px-3 py-1.5 ${decision === "pending" ? "bg-card" : "border-success/20 bg-success-soft text-success"}`}
-            >
-              {decision === "pending" ? <Clock3 /> : <CircleCheck />}
-              {decision === "pending" ? "Pending review" : decisionLabel}
-            </Badge>
+          <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
+            <div><Heading level={1}>Recommendation</Heading><Text variant="muted" className="mt-2">{patient.name} · {patient.displayId}</Text></div>
+            <Badge variant="outline" className={decision === "accepted" || decision === "modified" ? "bg-success-soft text-success" : "bg-muted"}>{recommendationDecisionLabel(decision)}</Badge>
           </div>
-          <div className="grid items-start gap-6 xl:grid-cols-[1fr_320px]">
-            <div className="space-y-5">
-              <section className="clinical-panel overflow-hidden">
-                <div className="border-b p-5 sm:p-7">
-                  <div className="mb-5 flex flex-wrap items-center gap-3">
-                    <span className="flex size-10 items-center justify-center rounded-xl bg-accent text-primary">
-                      <ClipboardList className="size-5" />
-                    </span>
-                    <Text className="section-kicker">Patient follow-up</Text>
-                    <Text variant="mono" className="ml-auto">
-                      {recommendation.id}
-                    </Text>
+          <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <div className="min-w-0 space-y-5">
+              <section className="clinical-panel p-5 sm:p-6">
+                <Heading level={3} as="h2" className="break-words">{recommendation.title}</Heading>
+                <Text className="mt-4 whitespace-pre-wrap break-words leading-relaxed">{action?.text ?? recommendation.text}</Text>
+                {decision === "modified" && (
+                  <Collapsible className="mt-4">
+                    <CollapsibleTrigger asChild><Button variant="ghost" type="button" className="group gap-2">Original recommendation<ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" /></Button></CollapsibleTrigger>
+                    <CollapsibleContent><Text variant="muted" className="mt-3 whitespace-pre-wrap break-words">{recommendation.text}</Text></CollapsibleContent>
+                  </Collapsible>
+                )}
+                <div className="mt-6"><Heading level={4} as="h3">Why suggested</Heading><Text variant="muted" className="mt-3 break-words leading-relaxed">{recommendation.explanation}</Text></div>
+                <div className="mt-5 rounded-lg bg-muted p-4"><Text variant="small">Referenced signal</Text><Text className="mt-2 font-medium break-words">{recommendation.signal}</Text><Text variant="small" className="mt-2">{recommendation.signalDate}</Text></div>
+                {!action && (
+                  <div className="mt-6 flex flex-col flex-wrap gap-3 sm:flex-row">
+                    <Button onClick={() => decide("accepted")}><Check className="size-4" />Approve recommendation</Button>
+                    <Button variant="outline" onClick={() => { setEdited(recommendation.text); setDialog("edit"); }}><Pencil className="size-4" />Edit & approve</Button>
+                    <Button variant="ghost" onClick={() => setDialog("dismiss")}><X className="size-4" />Dismiss</Button>
                   </div>
-                  <Heading level={2} as="h2">
-                    {recommendation.title}
-                  </Heading>
-                  <Text className="mt-5 text-base leading-7">
-                    {recommendation.text}
-                  </Text>
-                </div>
-                <div className="p-5 sm:p-7">
-                  <Heading level={4} as="h3">
-                    Why this is being suggested
-                  </Heading>
-                  <Text variant="muted" className="mt-3 leading-7">
-                    {recommendation.explanation}
-                  </Text>
-                  <div className="mt-5 rounded-lg border bg-muted/30 p-4">
-                    <Text className="mb-2 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                      Referenced signal
-                    </Text>
-                    <Text className="font-medium">{recommendation.signal}</Text>
-                    <Text variant="small" className="mt-2">
-                      {recommendation.signalDate}
-                    </Text>
-                    <Text variant="small" className="mt-1">
-                      Snapshot: Oct 19, 2026 · 12:00 UTC
-                    </Text>
-                  </div>
-                </div>
+                )}
               </section>
-              {decision === "pending" ? (
-                <section className="clinical-panel p-5 sm:p-7">
-                  <Heading level={3} as="h2">
-                    Your response
-                  </Heading>
-                  <Text variant="muted" className="mt-2">
-                    Choose the response that fits your review.
-                  </Text>
-                  <div className="mt-5 flex flex-col flex-wrap gap-3 sm:flex-row">
-                    <Button
-                      className="min-h-11"
-                      onClick={() => preview("accepted")}
-                    >
-                      <Check />
-                      Accept recommendation
-                    </Button>
-                    <Button
-                      className="min-h-11 bg-card"
-                      variant="outline"
-                      onClick={() => setDialog("edit")}
-                    >
-                      <PencilLine />
-                      Modify and accept
-                    </Button>
-                    <Button
-                      className="min-h-11 text-muted-foreground"
-                      variant="ghost"
-                      onClick={() => setDialog("dismiss")}
-                    >
-                      <X />
-                      Dismiss
-                    </Button>
-                  </div>
-                </section>
-              ) : (
-                <section
-                  aria-live="polite"
-                  className={`rounded-xl border p-5 sm:p-7 ${decision === "dismissed" ? "border-border bg-card" : "border-success/20 bg-success-soft"}`}
-                >
-                  <div className="mb-4 flex items-center gap-3">
-                    {decision === "dismissed" ? (
-                      <X className="size-5 text-muted-foreground" />
-                    ) : (
-                      <CircleCheck className="size-5 text-success" />
-                    )}
-                    <Heading level={3} as="h2">
-                      {decisionLabel}
-                    </Heading>
-                  </div>
-                  <Text className="leading-7">
-                    {decision === "modified"
-                      ? edited
-                      : decision === "dismissed"
-                        ? "This recommendation has been dismissed."
-                        : recommendation.text}
-                  </Text>
-                  {decision === "dismissed" && reason ? (
-                    <div className="mt-4 rounded-md bg-muted/40 p-3">
-                      <Text variant="small">Reason (optional)</Text>
-                      <Text className="mt-1">{reason}</Text>
-                    </div>
-                  ) : null}
-                  <div className="mt-5 border-t border-current/10 pt-4">
-                    <Text className="text-xs font-medium">
-                      Dr. Sarah Lewis · Oct 19, 2026 · 12:05 UTC
-                    </Text>
-                  </div>
-                  <div className="mt-5 flex flex-col gap-3 sm:flex-row">
-                    <Button asChild className="min-h-11">
-                      <a href={back}>
-                        Return to monitoring
-                        <ArrowRight />
-                      </a>
-                    </Button>
-                    <Button
-                      variant="outline"
-                      className="min-h-11 bg-card"
-                      onClick={() => preview("pending")}
-                    >
-                      <RotateCcw />
-                      Explore another response
-                    </Button>
-                  </div>
-                </section>
+              {action && (
+                <Panel title="Your decision">
+                  <dl className="grid gap-5 sm:grid-cols-2"><Detail label="Action" value={recommendationDecisionLabel(action.decision)} /><Detail label="Recorded by" value={action.author} /><Detail label="Recorded at" value={action.date} /><Detail label="Recommendation ID" value={recommendation.id} /></dl>
+                  {action.reason && <div className="mt-5"><Text variant="small">Dismissal reason</Text><Text className="mt-2 whitespace-pre-wrap break-words">{action.reason}</Text></div>}
+                  <Button asChild variant="outline" className="mt-6"><a href={patientHref} onClick={(event) => followPreviewLink(event, returnToPatient)}>{returnLabel}<ArrowUpRight className="size-4" /></a></Button>
+                </Panel>
               )}
-              <div className="flex items-start gap-3 rounded-lg bg-muted/60 p-4">
-                <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-                <Text variant="small" className="leading-relaxed">
-                  This response does not close the patient’s alert or update the
-                  care plan. The original recommendation remains visible above.
-                </Text>
-              </div>
             </div>
-            <aside className="clinical-panel p-5 sm:p-6">
-              <Text className="section-kicker mb-4">Patient context</Text>
-              <Heading level={3} as="h2">
-                {patient.name}
-              </Heading>
-              <Text variant="small" className="mt-1">
-                {patient.dob} · {patient.displayId}
-              </Text>
-              <div className="my-4">
-                <TrackBadges tracks={patient.tracks} />
-              </div>
-              <Flag flag={patient.flag} />
-              <dl className="mt-5 space-y-4 border-t pt-5 text-sm">
-                <div>
-                  <dt className="text-xs text-muted-foreground">
-                    Last measurement
-                  </dt>
-                  <dd
-                    className={`mt-1 font-medium ${patient.overdue ? "text-warning" : ""}`}
-                  >
-                    {patient.elapsed}
-                  </dd>
-                  <dd className="mt-1 text-xs text-muted-foreground">
-                    {patient.measurementType} · {patient.lastDate}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">
-                    Latest value
-                  </dt>
-                  <dd className="mt-1 font-medium">{patient.reading}</dd>
-                  <dd className="mt-1 text-xs text-muted-foreground">
-                    {patient.readingDate}
-                  </dd>
-                </div>
-                <div>
-                  <dt className="text-xs text-muted-foreground">
-                    Data quality
-                  </dt>
-                  <dd className="mt-1 text-xs">{patient.outcome.quality}</dd>
-                </div>
-              </dl>
-              <Button
-                asChild
-                variant="outline"
-                className="mt-6 min-h-11 w-full"
-              >
-                <a href={overview}>
-                  View patient overview
-                  <ArrowRight />
-                </a>
-              </Button>
+            <aside className="min-w-0">
+              <Panel title="Patient context">
+                <Heading level={4} as="h3">{patient.name}</Heading><Text variant="small" className="mt-2">DOB {patient.dob} · {patient.displayId}</Text>
+                <div className="mt-4 flex flex-wrap items-center gap-2"><TrackBadges tracks={patient.tracks} /><Flag flag={patient.flag} /></div>
+                <dl className="mt-6 grid gap-5"><Detail label="Last measurement" value={`${patient.measurementType} · ${patient.lastDate}`} /><Detail label="Latest value" value={patient.reading} /><Detail label="Measured at" value={patient.readingDate} /><Detail label="Data quality" value={patient.outcome.quality} /></dl>
+                <Button asChild variant="outline" className="mt-6 w-full"><a href={`${overview}#overview`} onClick={(event) => followPreviewLink(event, onPatientOpen ?? (returnTab === "recommendations" ? undefined : returnToPatient))}>View patient<ArrowUpRight className="size-4" /></a></Button>
+              </Panel>
             </aside>
           </div>
-          <Dialog
-            open={dialog !== null}
-            onOpenChange={(open) => {
-              if (!open) setDialog(null);
-            }}
-          >
-            <DialogContent className="max-h-[calc(100svh-var(--devbar-height)-2rem)] overflow-y-auto sm:max-w-xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {dialog === "edit"
-                    ? "Modify and accept recommendation"
-                    : "Dismiss recommendation"}
-                </DialogTitle>
-                <DialogDescription>
-                  {dialog === "edit"
-                    ? "Adjust the recommendation text. The original stays visible."
-                    : "You may add a reason. A reason is optional and does not affect dismissal."}
-                </DialogDescription>
-              </DialogHeader>
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  preview(dialog === "edit" ? "modified" : "dismissed");
-                }}
-              >
-                <Label htmlFor="response-text">
-                  {dialog === "edit"
-                    ? "Recommendation text"
-                    : "Reason (optional)"}
-                </Label>
-                <Textarea
-                  id="response-text"
-                  className="mt-2 min-h-36"
-                  value={dialog === "edit" ? edited : reason}
-                  onChange={(e) =>
-                    dialog === "edit"
-                      ? setEdited(e.target.value)
-                      : setReason(e.target.value)
-                  }
-                  placeholder={
-                    dialog === "dismiss" ? "Add context if helpful" : undefined
-                  }
-                />
-                <DialogFooter className="mt-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setDialog(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={dialog === "edit" && !edited.trim()}
-                  >
-                    {dialog === "edit"
-                      ? "Show modified acceptance"
-                      : "Show dismissal"}
-                  </Button>
-                </DialogFooter>
+          <Dialog open={dialog !== null} onOpenChange={(open) => { if (!open) setDialog(null); }}>
+            <DialogContent className="flex max-h-[85dvh] flex-col gap-6 overflow-hidden sm:max-w-xl">
+              <DialogHeader><DialogTitle>{dialog === "edit" ? "Edit & approve recommendation" : "Dismiss recommendation"}</DialogTitle><DialogDescription>{patient.name} · {patient.displayId}</DialogDescription></DialogHeader>
+              <form className="flex min-h-0 flex-col gap-6" onSubmit={(event) => { event.preventDefault(); decide(dialog === "edit" ? "modified" : "dismissed"); }}>
+                <div className="-mx-1 min-h-0 space-y-2 overflow-y-auto p-1">
+                  <Label htmlFor="response-text">{dialog === "edit" ? "Recommendation *" : "Reason (optional)"}</Label>
+                  <Textarea id="response-text" className="min-h-36" maxLength={dialog === "edit" ? 4000 : 2000} required={dialog === "edit"} value={dialog === "edit" ? edited : reason} onChange={(event) => dialog === "edit" ? setEdited(event.target.value) : setReason(event.target.value)} />
+                </div>
+                <DialogFooter className="shrink-0"><Button type="button" variant="outline" onClick={() => setDialog(null)}>Cancel</Button><Button type="submit" disabled={dialog === "edit" && !edited.trim()}>{dialog === "edit" ? "Approve recommendation" : "Dismiss recommendation"}</Button></DialogFooter>
               </form>
             </DialogContent>
           </Dialog>

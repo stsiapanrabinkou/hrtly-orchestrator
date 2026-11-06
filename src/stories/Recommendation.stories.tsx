@@ -4,11 +4,14 @@ const meta = {
   title: "Orchestrator/Recommendation",
   component: RecommendationView,
   parameters: { layout: "fullscreen" },
+  render: (args) => <RecommendationView key={`${args.recommendation?.id}-${args.initialDecision}-${args.state}`} {...args} />,
   args: { appBase: "http://localhost:5173", returnView: "gap" },
 } satisfies Meta<typeof RecommendationView>;
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const PendingReview: Story = {};
+export const FromCommunications: Story = { args: { returnTab: "communications" } };
+export const DifferentActingUser: Story = { args: { actingUser: "Maya Torres, RN" } };
 export const Accepted: Story = { args: { initialDecision: "accepted" } };
 export const ModifiedAndAccepted: Story = {
   args: { initialDecision: "modified" },

@@ -1,0 +1,13 @@
+import type { Meta, StoryObj } from "@storybook/tanstack-react";
+import { AccessView } from "@/shared/ui/orchestrator/AccessView";
+const meta = { title: "Orchestrator/Access", component: AccessView, parameters: { layout: "fullscreen" }, args: { appBase: "http://localhost:5173" }, render: (args) => <AccessView key={JSON.stringify(args)} {...args} /> } satisfies Meta<typeof AccessView>;
+export default meta;
+type Story = StoryObj<typeof meta>;
+export const Default: Story = {};
+export const Recovery: Story = { args: { mode: "recover" } };
+export const ResetPassword: Story = { args: { mode: "reset" } };
+export const SessionEnded: Story = { args: { mode: "session-ended" } };
+export const AccessDenied: Story = { args: { mode: "access-denied" } };
+export const InvalidCredentials: Story = { args: { errorState: "invalid" } };
+export const LockedAccount: Story = { args: { errorState: "locked" } };
+export const ExpiredResetLink: Story = { args: { mode: "reset", errorState: "expired" } };

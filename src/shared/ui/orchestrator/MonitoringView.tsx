@@ -1,7 +1,8 @@
+import { PreviewLink } from "./FlowNavigation";
+import { SearchField } from "./SearchField";
 import { dropdownStyles } from "@/shared/ui/dropdown-styles";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import {
-  Search,
   ArrowRight,
   ArrowUp,
   ArrowDown,
@@ -140,7 +141,6 @@ function PatientRows({
               <TableHead key={key} className={className} aria-sort={active ? sorting.direction : undefined}>
                 <Button
                   variant="ghost"
-                  size="sm"
                   className={`-mx-2 h-10 gap-1.5 px-2 text-xs ${active ? "text-foreground" : "text-muted-foreground"}`}
                   onClick={() => onSort({
                     column: key,
@@ -167,12 +167,12 @@ function PatientRows({
                 className="relative scroll-mt-28 cursor-pointer hover:bg-muted/40 has-focus-visible:bg-muted/40"
               >
                 <TableCell className="py-3 pl-5">
-                  <a
+                  <PreviewLink
                     className="inline-block rounded-sm font-semibold text-foreground underline-offset-4 after:absolute after:inset-0 hover:text-primary hover:underline"
                     href={`${appBase}/patients/${p.id}/from/${view}`}
                   >
                     {p.name}
-                  </a>
+                  </PreviewLink>
                   <Text variant="small" className="mt-1">
                     {p.dob} <span className="mx-1 text-border">·</span>{" "}
                     {p.displayId}
@@ -211,14 +211,14 @@ function PatientRows({
                   </Text>
                 </TableCell>
                 <TableCell className="pr-5">
-                  <Button asChild variant="ghost" size="icon-sm">
-                    <a
+                  <Button asChild variant="ghost" size="icon">
+                    <PreviewLink
                       href={`${appBase}/patients/${p.id}/from/${view}`}
                       aria-label={`Open patient ${p.name}`}
                       className="relative z-10"
                     >
                       <ChevronRight />
-                    </a>
+                    </PreviewLink>
                   </Button>
                 </TableCell>
               </TableRow>
@@ -235,12 +235,12 @@ function PatientRows({
           >
             <div className="mb-3 flex items-start justify-between gap-2">
               <div>
-                <a
+                <PreviewLink
                   href={`${appBase}/patients/${p.id}/from/${view}`}
                   className="rounded-sm font-semibold underline-offset-4 hover:underline"
                 >
                   {p.name}
-                </a>
+                </PreviewLink>
                 <Text variant="small" className="mt-1">
                   {p.dob} · {p.displayId}
                 </Text>
@@ -274,11 +274,11 @@ function PatientRows({
                 </Text>
               </div>
             </div>
-            <Button asChild variant="outline" className="min-h-11 w-full">
-              <a href={`${appBase}/patients/${p.id}/from/${view}`}>
+            <Button asChild variant="outline" className="w-full">
+              <PreviewLink href={`${appBase}/patients/${p.id}/from/${view}`}>
                 Open patient
                 <ArrowRight />
-              </a>
+              </PreviewLink>
             </Button>
           </article>
         ))}
@@ -304,7 +304,6 @@ export function MonitoringView({
   const [pageSize, setPageSize] = useState(10);
   const [pageJump, setPageJump] = useState("");
   const [query, setQuery] = useState(state.query);
-  const searchInput = useRef<HTMLInputElement>(null);
   const [filtersChanged, setFiltersChanged] = useState(false);
   const [selection, setSelection] = useState({
     alert: state.alert,
@@ -354,7 +353,7 @@ export function MonitoringView({
     : fixedMode;
   const chips = [
     ...selection.tracks.map(trackLabel),
-    ...(selection.alert !== "all" ? [{ red: "Red flag", yellow: "Yellow flag", clear: "No alerts" }[selection.alert]] : []),
+    ...(selection.alert !== "all" ? [{ red: "Critical", yellow: "Warning", clear: "No alerts" }[selection.alert]] : []),
     ...(selection.recency !== "all" ? [selection.recency === "never" ? "No measurements" : "More than 7 days"] : []),
   ];
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -405,8 +404,8 @@ export function MonitoringView({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All alerts</SelectItem>
-            <SelectItem value="red">Red flag</SelectItem>
-            <SelectItem value="yellow">Yellow flag</SelectItem>
+            <SelectItem value="red">Critical</SelectItem>
+            <SelectItem value="yellow">Warning</SelectItem>
             <SelectItem value="clear">No alerts</SelectItem>
           </SelectContent>
         </Select>
@@ -468,7 +467,7 @@ export function MonitoringView({
     </div>
   );
   return (
-    <Shell appBase={appBase} showFooter={false}>
+    <Shell appBase={appBase}>
       <div className="mb-7 flex flex-wrap items-center justify-between gap-4">
         <Heading level={1}>Monitoring</Heading>
         <div className="flex flex-wrap items-center gap-3">
@@ -491,8 +490,8 @@ export function MonitoringView({
       </div>
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
-          "Red flags",
-          "Yellow flags",
+          "Critical alerts",
+          "Warnings",
           "No measurements >7 days",
         ].map((label, i) => {
           const Icon = [CircleAlert, AlertTriangle, Clock3][i];
@@ -637,34 +636,12 @@ export function MonitoringView({
               >
                 Search patients
               </Label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-3 size-4 text-muted-foreground" />
-                <Input
-                  ref={searchInput}
-                  id="patient-search"
-                  className="h-10 bg-card pl-9 pr-10"
-                  placeholder="Name or patient ID"
-                  value={query}
-                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-                  autoComplete="off"
-                />
-                {query.length > 0 ? (
-                  <Button
-                    size="icon-sm"
-                    type="button"
-                    variant="ghost"
-                    className="absolute right-1 top-1 size-8"
-                    aria-label="Clear search"
-                    onClick={() => {
-                      setPage(1);
-                      setQuery("");
-                      searchInput.current?.focus({ preventScroll: true });
-                    }}
-                  >
-                    <X className="size-4" />
-                  </Button>
-                ) : null}
-              </div>
+              <SearchField
+                id="patient-search"
+                placeholder="Name or patient ID"
+                value={query}
+                onValueChange={(value) => { setQuery(value); setPage(1); }}
+              />
             </div>
             <div className="hidden lg:col-span-3 lg:block [&>div]:grid-cols-3">{filters}</div>
             <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
@@ -708,9 +685,8 @@ export function MonitoringView({
                 </Badge>
               ))}
               <Button
-                size="sm"
                 variant="ghost"
-                className="h-7 text-muted-foreground"
+                className="text-muted-foreground"
                 onClick={() => go("all")}
               >
                 <X className="size-3" />
@@ -749,7 +725,7 @@ export function MonitoringView({
             <nav aria-label="Patient pagination" className="flex items-center gap-1">
             <Button
               variant="outline"
-              size="icon-sm"
+              size="icon"
               disabled={unavailable || currentPage === 1}
               onClick={() => setPage(currentPage - 1)}
               aria-label="Previous page"
@@ -763,7 +739,7 @@ export function MonitoringView({
                 ) : null}
                 <Button
                   variant={number === currentPage ? "default" : "outline"}
-                  size="icon-sm"
+                  size="icon"
                   aria-label={`Go to page ${number}`}
                   aria-current={number === currentPage ? "page" : undefined}
                   disabled={unavailable}
@@ -773,7 +749,7 @@ export function MonitoringView({
             ))}
             <Button
               variant="outline"
-              size="icon-sm"
+              size="icon"
               disabled={unavailable || currentPage === pageCount}
               onClick={() => setPage(currentPage + 1)}
               aria-label="Next page"
@@ -800,13 +776,13 @@ export function MonitoringView({
                 min={1}
                 max={pageCount}
                 step={1}
-                className="h-7 w-16 bg-card px-2 text-xs"
+                className="h-10 w-16 bg-card px-2 text-xs"
                 placeholder={String(currentPage)}
                 value={pageJump}
                 onChange={(event) => setPageJump(event.target.value)}
                 disabled={unavailable || count === 0}
               />
-              <Button type="submit" variant="outline" size="sm" disabled={unavailable || count === 0 || !pageJump.trim()}>Go</Button>
+              <Button type="submit" variant="outline" disabled={unavailable || count === 0 || !pageJump.trim()}>Go</Button>
             </form>
           </div>
         </div>

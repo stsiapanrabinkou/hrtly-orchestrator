@@ -17,8 +17,8 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 export const AllPatients: Story = { args: { view: "all" } };
-export const RedFlags: Story = { args: { view: "red" } };
-export const YellowFlags: Story = { args: { view: "yellow" } };
+export const RedFlags: Story = { name: "Critical alerts", args: { view: "red" } };
+export const YellowFlags: Story = { name: "Warnings", args: { view: "yellow" } };
 export const NoAlerts: Story = { args: { view: "clear" } };
 export const OverSevenDays: Story = { args: { view: "overdue" } };
 export const CareGap: Story = { args: { view: "gap" } };

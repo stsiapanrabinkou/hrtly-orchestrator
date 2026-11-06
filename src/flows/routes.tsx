@@ -16,6 +16,9 @@ import WorkspaceScreen from "./workspace/WorkspaceScreen";
 import MonitoringScreen from "./monitoring/MonitoringScreen";
 import PatientScreen from "./patients/PatientScreen";
 import RecommendationScreen from "./recommendations/RecommendationScreen";
+import EnrollmentScreen from "./enrollment/EnrollmentScreen";
+import AdministrationScreen from "./administration/AdministrationScreen";
+import AccessScreen from "./access/AccessScreen";
 
 export type FlowRoute = {
   /** "/" | "loans" | ":id". Nested under the parent's path. */
@@ -38,13 +41,16 @@ export type FlowRoute = {
 };
 
 export const routes: FlowRoute[] = [
+  { path: "patients/enroll", component: EnrollmentScreen, meta: { role: "clinician", flow: "Enrollment", label: "Enroll patient" } },
+  { path: "administration", component: AdministrationScreen, meta: { role: "admin", flow: "Administration", label: "Users & roles" } },
+  { path: "access/:mode", component: AccessScreen, meta: { flow: "Access", label: "Sign in and recovery", sampleParams: { mode: "sign-in" } } },
   {
     path: ":section",
     component: WorkspaceScreen,
     meta: {
       role: "clinician",
       flow: "Workspace navigation",
-      label: "Planned sections",
+      label: "Workspace sections",
       sampleParams: { section: "patients" },
     },
   },

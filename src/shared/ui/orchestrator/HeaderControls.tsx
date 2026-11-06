@@ -1,5 +1,6 @@
+import { PreviewLink } from "./FlowNavigation";
 import { useState } from "react";
-import { ChevronDown, Globe2, LogOut, Moon, Sun, UserRound } from "lucide-react";
+import { ChevronDown, Globe2, LogOut, Moon, Sun, UserRound, Settings2 } from "lucide-react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -9,7 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogDescription, DialogFooter, DialogClose,
+  DialogDescription, DialogFooter,
 } from "@/components/ui/dialog";
 import { Text } from "@/shared/ui/typography";
 import { useTheme } from "@/theme/ThemeProvider";
@@ -19,9 +20,10 @@ type Props = {
   profile?: ClinicianProfile;
   onProfileOpen?: () => void;
   onSignOutPreview?: () => void;
+  appBase?: string;
 };
 
-export function HeaderControls({ profile = mockClinician, onProfileOpen, onSignOutPreview }: Props) {
+export function HeaderControls({ profile = mockClinician, onProfileOpen, onSignOutPreview, appBase = "" }: Props) {
   const { mode, toggle } = useTheme();
   const [dialog, setDialog] = useState<"profile" | "sign-out" | null>(null);
   return (
@@ -61,8 +63,9 @@ export function HeaderControls({ profile = mockClinician, onProfileOpen, onSignO
             <DropdownMenuLabel><Text className="text-sm font-medium">{profile.name}</Text><Text variant="small">{profile.role}</Text></DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onSelect={() => { setDialog("profile"); onProfileOpen?.(); }}><UserRound />My profile</DropdownMenuItem>
+            {profile.role === "Administrator" && <DropdownMenuItem asChild><PreviewLink href={`${appBase}/administration`}><Settings2 />Administration</PreviewLink></DropdownMenuItem>}
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive" onSelect={() => { setDialog("sign-out"); onSignOutPreview?.(); }}><LogOut />Sign out</DropdownMenuItem>
+            <DropdownMenuItem variant="destructive" onSelect={() => setDialog("sign-out")}><LogOut />Sign out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -73,7 +76,7 @@ export function HeaderControls({ profile = mockClinician, onProfileOpen, onSignO
             <DialogDescription>{dialog === "profile" ? "Your clinician account details." : "Are you sure you want to sign out?"}</DialogDescription>
           </DialogHeader>
           {dialog === "profile" && <div className="flex items-center gap-3 rounded-lg border p-4"><Avatar className="size-12"><AvatarFallback className="bg-secondary text-primary">{profile.initials}</AvatarFallback></Avatar><div><Text className="font-medium">{profile.name}</Text><Text variant="small">{profile.role}</Text></div></div>}
-          <DialogFooter><DialogClose asChild><Button variant="outline">Close</Button></DialogClose></DialogFooter>
+          <DialogFooter><Button variant="outline" onClick={() => setDialog(null)}>{dialog === "sign-out" ? "Cancel" : "Close"}</Button>{dialog === "sign-out" && <Button onClick={() => { onSignOutPreview?.(); window.location.assign(`${appBase}/access/sign-in`); }}>Sign out</Button>}</DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

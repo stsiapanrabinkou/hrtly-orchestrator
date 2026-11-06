@@ -2,6 +2,10 @@ import { ArrowLeft, PanelsTopLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Heading, Text } from "@/shared/ui/typography";
 import { Shell } from "./Shell";
+import { PatientsListView } from "./PatientsListView";
+import { RecommendationsListView } from "./RecommendationsListView";
+import { MessagesListView } from "./MessagesListView";
+import { OutcomesView } from "./OutcomesView";
 import {
   workspaceNavigation,
   type WorkspaceItem,
@@ -12,6 +16,10 @@ export function WorkspacePreview({
   item = workspaceNavigation[1],
   appBase = "",
 }: Props) {
+  if (item.id === "patients") return <PatientsListView appBase={appBase} />;
+  if (item.id === "recommendations") return <RecommendationsListView appBase={appBase} />;
+  if (item.id === "messages") return <MessagesListView appBase={appBase} />;
+  if (item.id === "outcomes") return <OutcomesView appBase={appBase} />;
   const section =
     item.id === "patients" ||
     item.id === "recommendations" ||
